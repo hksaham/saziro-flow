@@ -4,7 +4,7 @@ import { useTone } from '@/contexts/ToneContext';
 import { supabase } from '@/integrations/supabase/client';
 import Logo from '@/components/ui/Logo';
 import ToneSelector from '@/components/ui/ToneSelector';
-import { LogOut, Copy, Check, Users, UserCheck, UserX, Loader2 } from 'lucide-react';
+import { LogOut, Copy, Check, Users, UserCheck, UserX, Loader2, Bell, X } from 'lucide-react';
 import StatusCard from '@/components/student/StatusCard';
 import ActionButton from '@/components/student/ActionButton';
 import FeatureCard from '@/components/student/FeatureCard';
@@ -43,6 +43,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     if (isTeacher && coachingId) {
@@ -294,9 +295,9 @@ const Dashboard = () => {
                 </div>
               </section>
 
-              {/* Section 3: Feature Cards Grid - 3 cols x 2 rows */}
+              {/* Section 3: Feature Cards Grid - responsive: 2 cols mobile, 3 cols desktop */}
               <section className="animate-fade-in delay-200 w-full">
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:gap-4 w-full">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 lg:gap-5 w-full">
                   <FeatureCard
                     type="mcqs"
                     label={t.mcqs}
@@ -337,7 +338,7 @@ const Dashboard = () => {
                 <h2 className="text-xl font-display font-bold text-foreground mb-4">
                   {t.performanceTitle}
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <PerformanceCard
                     type="mcqs-today"
                     label={t.mcqsSmashedToday}
@@ -348,25 +349,64 @@ const Dashboard = () => {
                     label={t.yourRank}
                     value="—"
                   />
-                  <PerformanceCard
-                    type="consistency"
-                    label={t.consistencyScore}
-                    value="N/A"
-                  />
                 </div>
               </section>
 
-              {/* Section 5: Notifications */}
-              <section className="animate-fade-in delay-400">
-                <NotificationsCard
-                  title={t.notifications}
-                  notifications={[
-                    { id: '1', message: t.dailyTestAvailable, isNew: true },
-                    { id: '2', message: t.newPracticeSets, isNew: false },
-                  ]}
-                  emptyMessage={t.noNotifications}
+              {/* Notification Toggle Button - Fixed at bottom right */}
+              <button
+                onClick={() => setShowNotifications(true)}
+                className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-emerald hover:scale-105 transition-all duration-300 flex items-center justify-center"
+              >
+                <Bell className="w-6 h-6" />
+                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-warning text-warning-foreground text-xs font-bold flex items-center justify-center">
+                  2
+                </span>
+              </button>
+
+              {/* Notifications Slide-up Panel */}
+              <div
+                className={`fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out ${
+                  showNotifications ? 'translate-y-0' : 'translate-y-full'
+                }`}
+              >
+                <div className="bg-card border-t border-border rounded-t-2xl shadow-2xl max-h-[70vh] overflow-hidden">
+                  {/* Handle bar */}
+                  <div className="flex justify-center pt-3 pb-2">
+                    <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+                  </div>
+                  
+                  {/* Header with close button */}
+                  <div className="flex items-center justify-between px-6 pb-4">
+                    <h3 className="text-lg font-display font-bold text-foreground">{t.notifications}</h3>
+                    <button
+                      onClick={() => setShowNotifications(false)}
+                      className="w-8 h-8 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors"
+                    >
+                      <X className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  </div>
+                  
+                  {/* Notifications content */}
+                  <div className="px-6 pb-8 max-h-[50vh] overflow-y-auto">
+                    <NotificationsCard
+                      title=""
+                      notifications={[
+                        { id: '1', message: t.dailyTestAvailable, isNew: true },
+                        { id: '2', message: t.newPracticeSets, isNew: false },
+                      ]}
+                      emptyMessage={t.noNotifications}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Backdrop when notifications open */}
+              {showNotifications && (
+                <div
+                  className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm animate-fade-in"
+                  onClick={() => setShowNotifications(false)}
                 />
-              </section>
+              )}
             </div>
           )}
         </div>

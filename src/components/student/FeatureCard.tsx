@@ -46,10 +46,15 @@ const FeatureCard = ({ type, label, isActive, comingSoonLabel, onClick }: Featur
         min-h-[120px] sm:min-h-[140px] lg:min-h-[160px]
         transition-all duration-300 ease-out
         ${isActive 
-          ? 'bg-card border-border cursor-pointer hover:border-primary/40 hover:shadow-emerald hover:-translate-y-1 group' 
-          : 'bg-card/50 border-border/50 cursor-not-allowed opacity-60'
+          ? 'border-primary/20 cursor-pointer hover:border-primary/40 hover:shadow-emerald hover:-translate-y-1 group' 
+          : 'border-border/50 cursor-not-allowed opacity-60'
         }
       `}
+      style={{
+        background: isActive 
+          ? 'linear-gradient(135deg, hsl(152, 40%, 8%) 0%, hsl(152, 30%, 5%) 50%, hsl(0, 0%, 6%) 100%)'
+          : 'linear-gradient(135deg, hsl(0, 0%, 8%) 0%, hsl(0, 0%, 5%) 100%)'
+      }}
     >
       {/* Coming Soon Badge */}
       {!isActive && comingSoonLabel && (
@@ -59,9 +64,12 @@ const FeatureCard = ({ type, label, isActive, comingSoonLabel, onClick }: Featur
         </div>
       )}
       
+      {/* Emerald glow overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 opacity-50" />
+      
       {/* Hover glow for active cards */}
       {isActive && (
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       )}
       
       {/* Icon */}

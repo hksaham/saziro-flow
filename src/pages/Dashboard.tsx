@@ -4,7 +4,12 @@ import { useTone } from '@/contexts/ToneContext';
 import { supabase } from '@/integrations/supabase/client';
 import Logo from '@/components/ui/Logo';
 import ToneSelector from '@/components/ui/ToneSelector';
-import { LogOut, Copy, Check, Users, UserCheck, UserX, Loader2, BookOpen } from 'lucide-react';
+import { LogOut, Copy, Check, Users, UserCheck, UserX, Loader2 } from 'lucide-react';
+import StatusCard from '@/components/student/StatusCard';
+import ActionButton from '@/components/student/ActionButton';
+import FeatureCard from '@/components/student/FeatureCard';
+import PerformanceCard from '@/components/student/PerformanceCard';
+import NotificationsCard from '@/components/student/NotificationsCard';
 
 interface PendingStudent {
   id: string;
@@ -18,6 +23,17 @@ interface Coaching {
   name: string;
   invite_token: string;
 }
+/**
+ * Skeleton Phase - Placeholder Data
+ * Future Hook Notes:
+ * - XP → /users/{id}/xp
+ * - Streak → /users/{id}/streak
+ * - Performance → /performance/{date}
+ * - Notifications → /notifications/{userId}
+ */
+const xp = 0;
+const streak = 0;
+const mcqsToday = 0;
 
 const Dashboard = () => {
   const { profile, signOut, coachingId, isTeacher } = useAuth();
@@ -247,22 +263,110 @@ const Dashboard = () => {
             </>
           )}
 
-          {/* Student View */}
+          {/* Student View - Full Dashboard */}
           {!isTeacher && (
-            <div className="card-premium p-8 text-center animate-slide-in">
-              <div className="w-20 h-20 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-6">
-                <BookOpen className="w-10 h-10 text-primary" />
-              </div>
-              <h2 className="text-2xl font-display font-bold text-foreground mb-2">
-                {t.welcome}
-              </h2>
-              <p className="text-muted-foreground">
-                Your account is approved! Start exploring your courses and materials.
-              </p>
-              <div className="mt-8 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 border border-success/20">
-                <Check className="w-4 h-4 text-success" />
-                <span className="text-sm font-medium text-success">Account Approved</span>
-              </div>
+            <div className="space-y-8">
+              {/* Section 1: Status Overview */}
+              <section className="animate-fade-in">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <StatusCard 
+                    type="xp" 
+                    label={t.totalXP} 
+                    value={xp} 
+                  />
+                  <StatusCard 
+                    type="streak" 
+                    label={t.currentStreak} 
+                    value={streak} 
+                  />
+                </div>
+              </section>
+
+              {/* Section 2: Primary Actions */}
+              <section className="animate-fade-in delay-100">
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <ActionButton variant="primary">
+                    {t.startDailyTest}
+                  </ActionButton>
+                  <ActionButton variant="outline">
+                    {t.startPractice}
+                  </ActionButton>
+                </div>
+              </section>
+
+              {/* Section 3: Feature Cards Grid */}
+              <section className="animate-fade-in delay-200">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  <FeatureCard
+                    type="mcqs"
+                    label={t.mcqs}
+                    isActive={true}
+                  />
+                  <FeatureCard
+                    type="cq-explainer"
+                    label={t.cqExplainer}
+                    isActive={false}
+                    comingSoonLabel={t.comingSoon}
+                  />
+                  <FeatureCard
+                    type="mistake-notebook"
+                    label={t.mistakeNotebook}
+                    isActive={true}
+                  />
+                  <FeatureCard
+                    type="suggestions"
+                    label={t.suggestions}
+                    isActive={false}
+                    comingSoonLabel={t.comingSoon}
+                  />
+                  <FeatureCard
+                    type="leaderboard"
+                    label={t.leaderboard}
+                    isActive={true}
+                  />
+                  <FeatureCard
+                    type="profile"
+                    label={t.profile}
+                    isActive={true}
+                  />
+                </div>
+              </section>
+
+              {/* Section 4: Performance Dashboard */}
+              <section className="animate-fade-in delay-300">
+                <h2 className="text-xl font-display font-bold text-foreground mb-4">
+                  {t.performanceTitle}
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <PerformanceCard
+                    type="mcqs-today"
+                    label={t.mcqsSmashedToday}
+                    value={mcqsToday}
+                  />
+                  <PerformanceCard
+                    type="rank"
+                    label={t.yourRank}
+                    value="—"
+                  />
+                  <PerformanceCard
+                    type="consistency"
+                    label={t.consistencyScore}
+                    value="N/A"
+                  />
+                </div>
+              </section>
+
+              {/* Section 5: Notifications */}
+              <section className="animate-fade-in delay-400">
+                <NotificationsCard
+                  title={t.notifications}
+                  notifications={[
+                    { id: '1', message: t.dailyTestAvailable, isNew: true },
+                    { id: '2', message: t.newPracticeSets, isNew: false },
+                  ]}
+                  emptyMessage={t.noNotifications}
+                />
+              </section>
             </div>
           )}
         </div>

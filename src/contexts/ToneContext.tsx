@@ -28,6 +28,30 @@ interface ToneTexts {
   logout: string;
   dashboard: string;
   waitMessage: string;
+  // Student Dashboard - Status Overview
+  totalXP: string;
+  currentStreak: string;
+  // Student Dashboard - Primary Actions
+  startDailyTest: string;
+  startPractice: string;
+  // Student Dashboard - Feature Cards
+  mcqs: string;
+  cqExplainer: string;
+  mistakeNotebook: string;
+  suggestions: string;
+  leaderboard: string;
+  profile: string;
+  comingSoon: string;
+  // Student Dashboard - Performance
+  performanceTitle: string;
+  mcqsSmashedToday: string;
+  yourRank: string;
+  consistencyScore: string;
+  // Student Dashboard - Notifications
+  notifications: string;
+  dailyTestAvailable: string;
+  newPracticeSets: string;
+  noNotifications: string;
 }
 
 const toneTexts: Record<ToneType, ToneTexts> = {
@@ -57,6 +81,30 @@ const toneTexts: Record<ToneType, ToneTexts> = {
     logout: 'Logout',
     dashboard: 'Dashboard',
     waitMessage: 'Ektu wait kor, teacher dekhtese...',
+    // Student Dashboard - Status Overview
+    totalXP: 'Total XP 🔥',
+    currentStreak: 'Tomar Streak 🔥',
+    // Student Dashboard - Primary Actions
+    startDailyTest: 'Cholo Test Di! 💪',
+    startPractice: 'Practice Kor Bro',
+    // Student Dashboard - Feature Cards
+    mcqs: 'MCQs',
+    cqExplainer: 'CQ Explainer',
+    mistakeNotebook: 'Mistake Notebook',
+    suggestions: 'Suggestions',
+    leaderboard: 'Leaderboard',
+    profile: 'Profile',
+    comingSoon: 'Coming Soon 🔜',
+    // Student Dashboard - Performance
+    performanceTitle: 'Tomar Performance Dashboard 📊',
+    mcqsSmashedToday: 'Ajke MCQs Smashed',
+    yourRank: 'Tomar Rank',
+    consistencyScore: 'Consistency Score',
+    // Student Dashboard - Notifications
+    notifications: 'Updates 🔔',
+    dailyTestAvailable: 'Ajker test ready ache bro! 💪',
+    newPracticeSets: 'Notun practice sets add hoise!',
+    noNotifications: 'Kono notification nai ekhon',
   },
   'friendly-banglish': {
     welcome: 'Study Buddy te Swagotom! 🎓',
@@ -84,6 +132,30 @@ const toneTexts: Record<ToneType, ToneTexts> = {
     logout: 'Logout',
     dashboard: 'Dashboard',
     waitMessage: 'Please wait korun, teacher review korchen...',
+    // Student Dashboard - Status Overview
+    totalXP: 'Total XP',
+    currentStreak: 'Current Streak',
+    // Student Dashboard - Primary Actions
+    startDailyTest: 'Start Daily Test',
+    startPractice: 'Start Practice',
+    // Student Dashboard - Feature Cards
+    mcqs: 'MCQs',
+    cqExplainer: 'CQ Explainer',
+    mistakeNotebook: 'Mistake Notebook',
+    suggestions: 'Suggestions',
+    leaderboard: 'Leaderboard',
+    profile: 'Profile',
+    comingSoon: 'Coming Soon',
+    // Student Dashboard - Performance
+    performanceTitle: 'Your Performance Dashboard 📊',
+    mcqsSmashedToday: 'MCQs Smashed Today',
+    yourRank: 'Your Rank',
+    consistencyScore: 'Consistency Score',
+    // Student Dashboard - Notifications
+    notifications: 'Notifications 🔔',
+    dailyTestAvailable: 'Ajker test ready ache!',
+    newPracticeSets: 'New practice sets added!',
+    noNotifications: 'No notifications right now',
   },
   'formal-bangla': {
     welcome: 'স্টাডি বাডিতে স্বাগতম! 🎓',
@@ -111,6 +183,30 @@ const toneTexts: Record<ToneType, ToneTexts> = {
     logout: 'লগআউট',
     dashboard: 'ড্যাশবোর্ড',
     waitMessage: 'অনুগ্রহ করে অপেক্ষা করুন, শিক্ষক পর্যালোচনা করছেন...',
+    // Student Dashboard - Status Overview
+    totalXP: 'মোট এক্সপি',
+    currentStreak: 'বর্তমান স্ট্রিক',
+    // Student Dashboard - Primary Actions
+    startDailyTest: 'দৈনিক পরীক্ষা শুরু করুন',
+    startPractice: 'অনুশীলন শুরু করুন',
+    // Student Dashboard - Feature Cards
+    mcqs: 'এমসিকিউ',
+    cqExplainer: 'সিকিউ ব্যাখ্যাকারী',
+    mistakeNotebook: 'ভুল নোটবুক',
+    suggestions: 'পরামর্শ',
+    leaderboard: 'লিডারবোর্ড',
+    profile: 'প্রোফাইল',
+    comingSoon: 'শীঘ্রই আসছে',
+    // Student Dashboard - Performance
+    performanceTitle: 'আপনার পারফরম্যান্স ড্যাশবোর্ড 📊',
+    mcqsSmashedToday: 'আজকে সমাধানকৃত এমসিকিউ',
+    yourRank: 'আপনার র‍্যাঙ্ক',
+    consistencyScore: 'ধারাবাহিকতা স্কোর',
+    // Student Dashboard - Notifications
+    notifications: 'বিজ্ঞপ্তি 🔔',
+    dailyTestAvailable: 'আজকের পরীক্ষা প্রস্তুত',
+    newPracticeSets: 'নতুন অনুশীলন সেট যোগ করা হয়েছে',
+    noNotifications: 'এই মুহূর্তে কোনো বিজ্ঞপ্তি নেই',
   },
 };
 

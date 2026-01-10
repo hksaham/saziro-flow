@@ -41,9 +41,9 @@ const FeatureCard = ({ type, label, isActive, comingSoonLabel, onClick }: Featur
     <div
       onClick={isActive ? onClick : undefined}
       className={`
-        relative overflow-hidden rounded-xl border p-4 sm:p-6 lg:p-8
+        relative overflow-hidden rounded-xl border p-5 sm:p-6 lg:p-8
         flex flex-col items-center justify-center text-center
-        min-h-[120px] sm:min-h-[140px] lg:min-h-[160px]
+        min-h-[140px] sm:min-h-[150px] lg:min-h-[170px]
         transition-all duration-300 ease-out
         ${isActive 
           ? 'border-primary/20 cursor-pointer hover:border-primary/40 hover:shadow-emerald hover:-translate-y-1 group' 

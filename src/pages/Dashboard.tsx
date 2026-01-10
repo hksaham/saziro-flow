@@ -139,8 +139,8 @@ const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 container px-6 py-8">
-        <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+      <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 overflow-x-hidden">
+        <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-fade-in">
           {/* Welcome Section */}
           <div>
             <h1 className="text-3xl font-display font-bold text-foreground">
@@ -294,9 +294,9 @@ const Dashboard = () => {
                 </div>
               </section>
 
-              {/* Section 3: Feature Cards Grid */}
-              <section className="animate-fade-in delay-200">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {/* Section 3: Feature Cards Grid - 3 cols x 2 rows */}
+              <section className="animate-fade-in delay-200 w-full">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:gap-4 w-full">
                   <FeatureCard
                     type="mcqs"
                     label={t.mcqs}

@@ -41,7 +41,9 @@ const FeatureCard = ({ type, label, isActive, comingSoonLabel, onClick }: Featur
     <div
       onClick={isActive ? onClick : undefined}
       className={`
-        relative overflow-hidden rounded-xl border p-6
+        relative overflow-hidden rounded-xl border p-4 sm:p-6 lg:p-8
+        flex flex-col items-center justify-center text-center
+        min-h-[120px] sm:min-h-[140px] lg:min-h-[160px]
         transition-all duration-300 ease-out
         ${isActive 
           ? 'bg-card border-border cursor-pointer hover:border-primary/40 hover:shadow-emerald hover:-translate-y-1 group' 
@@ -51,9 +53,9 @@ const FeatureCard = ({ type, label, isActive, comingSoonLabel, onClick }: Featur
     >
       {/* Coming Soon Badge */}
       {!isActive && comingSoonLabel && (
-        <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-full bg-warning/20 border border-warning/30">
-          <Lock className="w-3 h-3 text-warning" />
-          <span className="text-xs font-medium text-warning">{comingSoonLabel}</span>
+        <div className="absolute top-2 right-2 sm:top-3 sm:right-3 flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-warning/20 border border-warning/30">
+          <Lock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-warning" />
+          <span className="text-[10px] sm:text-xs font-medium text-warning">{comingSoonLabel}</span>
         </div>
       )}
       
@@ -64,19 +66,19 @@ const FeatureCard = ({ type, label, isActive, comingSoonLabel, onClick }: Featur
       
       {/* Icon */}
       <div className={`
-        relative w-14 h-14 rounded-xl flex items-center justify-center mb-4
+        relative w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-xl flex items-center justify-center mb-3 lg:mb-4
         transition-colors duration-300
         ${isActive 
           ? 'bg-primary/10 group-hover:bg-primary/20' 
           : 'bg-muted/50'
         }
       `}>
-        <Icon className={`w-7 h-7 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+        <Icon className={`w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
       </div>
       
       {/* Label */}
       <h3 className={`
-        font-display font-semibold text-lg
+        font-display font-semibold text-sm sm:text-base lg:text-lg
         ${isActive ? 'text-foreground' : 'text-muted-foreground'}
       `}>
         {label}

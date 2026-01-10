@@ -120,7 +120,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background bg-pattern">
+    <div className="min-h-screen flex flex-col bg-background bg-pattern overflow-x-hidden">
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-lg sticky top-0 z-50">
         <div className="container flex justify-between items-center h-16 px-6">

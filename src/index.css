@@ -2,95 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Study Buddy B2B - Premium Dark Theme with Emerald Accents */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Dark Theme - Pure Black Foundation */
+    --background: 0 0% 3%;
+    --foreground: 0 0% 98%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Emerald Primary */
+    --primary: 152 69% 42%;
+    --primary-foreground: 0 0% 98%;
+    --primary-glow: 152 69% 52%;
+    --primary-muted: 152 40% 20%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 60%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 152 50% 15%;
+    --accent-foreground: 152 69% 55%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --success: 152 69% 42%;
+    --success-foreground: 0 0% 98%;
 
-    --radius: 0.5rem;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 6%;
 
-    --sidebar-background: 0 0% 98%;
+    --border: 0 0% 16%;
+    --input: 0 0% 12%;
+    --ring: 152 69% 42%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    --radius: 0.75rem;
 
-    --sidebar-primary: 240 5.9% 10%;
-
+    /* Sidebar */
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 85%;
+    --sidebar-primary: 152 69% 42%;
     --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 14%;
+    --sidebar-ring: 152 69% 42%;
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    /* Gradients */
+    --gradient-emerald: linear-gradient(135deg, hsl(152, 69%, 42%) 0%, hsl(152, 69%, 32%) 100%);
+    --gradient-emerald-glow: linear-gradient(135deg, hsl(152, 69%, 52%) 0%, hsl(152, 69%, 42%) 100%);
+    --gradient-dark: linear-gradient(180deg, hsl(0, 0%, 6%) 0%, hsl(0, 0%, 3%) 100%);
+    --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(0, 0%, 3%) 0%, hsl(152, 20%, 8%) 50%, hsl(0, 0%, 3%) 100%);
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
+    /* Shadows */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+    --shadow-emerald: 0 0 40px rgba(34, 197, 94, 0.15);
+    --shadow-emerald-glow: 0 0 60px rgba(34, 197, 94, 0.25);
+    --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
 
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Transitions */
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Already dark by default */
   }
 }
 
@@ -99,7 +91,314 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    @apply antialiased;
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(180deg, hsl(0, 0%, 3%) 0%, hsl(0, 0%, 2%) 100%);
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    @apply font-semibold tracking-tight;
+  }
+
+  ::selection {
+    background: hsl(152, 69%, 42%);
+    color: white;
+  }
+}
+
+@layer components {
+  /* Premium Card Styles */
+  .card-premium {
+    @apply bg-card rounded-xl border border-border;
+    box-shadow: var(--shadow-card);
+    background: linear-gradient(135deg, hsl(0, 0%, 7%) 0%, hsl(0, 0%, 5%) 100%);
+    backdrop-filter: blur(10px);
+    transition: all var(--transition-base);
+  }
+
+  .card-premium:hover {
+    border-color: hsl(152, 40%, 25%);
+    box-shadow: var(--shadow-lg), var(--shadow-emerald);
+    transform: translateY(-2px);
+  }
+
+  /* Glass Effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-emerald {
+    background: rgba(34, 197, 94, 0.05);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(34, 197, 94, 0.15);
+  }
+
+  /* Button Styles */
+  .btn-primary {
+    @apply px-6 py-3 rounded-lg font-medium text-primary-foreground relative overflow-hidden;
+    background: var(--gradient-emerald);
+    box-shadow: 0 4px 16px rgba(34, 197, 94, 0.25);
+    transition: all var(--transition-base);
+  }
+
+  .btn-primary:hover {
+    background: var(--gradient-emerald-glow);
+    box-shadow: 0 6px 24px rgba(34, 197, 94, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 rounded-lg font-medium border border-border bg-secondary text-secondary-foreground;
+    transition: all var(--transition-base);
+  }
+
+  .btn-secondary:hover {
+    @apply border-primary/50 bg-accent;
+    box-shadow: var(--shadow-emerald);
+  }
+
+  .btn-ghost {
+    @apply px-4 py-2 rounded-lg font-medium text-muted-foreground;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-ghost:hover {
+    @apply text-foreground bg-secondary;
+  }
+
+  /* Input Styles */
+  .input-premium {
+    @apply w-full px-4 py-3 rounded-lg bg-input border border-border text-foreground placeholder:text-muted-foreground;
+    transition: all var(--transition-fast);
+  }
+
+  .input-premium:focus {
+    @apply outline-none border-primary ring-2 ring-primary/20;
+    box-shadow: var(--shadow-emerald);
+  }
+
+  /* Text Gradient */
+  .text-gradient-emerald {
+    background: linear-gradient(135deg, hsl(152, 69%, 52%) 0%, hsl(152, 69%, 72%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Glow Effects */
+  .glow-emerald {
+    box-shadow: var(--shadow-emerald);
+  }
+
+  .glow-emerald-strong {
+    box-shadow: var(--shadow-emerald-glow);
+  }
+
+  /* Animated Background Pattern */
+  .bg-pattern {
+    background-image: 
+      radial-gradient(circle at 20% 50%, rgba(34, 197, 94, 0.08) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(34, 197, 94, 0.05) 0%, transparent 40%),
+      radial-gradient(circle at 40% 80%, rgba(34, 197, 94, 0.03) 0%, transparent 30%);
+  }
+
+  /* Animated Gradient Border */
+  .border-gradient {
+    position: relative;
+    background: hsl(0, 0%, 6%);
+    border-radius: var(--radius);
+  }
+
+  .border-gradient::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: calc(var(--radius) + 1px);
+    background: linear-gradient(135deg, hsl(152, 69%, 42%) 0%, transparent 50%, hsl(152, 69%, 42%) 100%);
+    z-index: -1;
+    opacity: 0.5;
+    transition: opacity var(--transition-base);
+  }
+
+  .border-gradient:hover::before {
+    opacity: 1;
+  }
+
+  /* Pulse Animation */
+  .pulse-emerald {
+    animation: pulse-emerald 2s infinite;
+  }
+
+  @keyframes pulse-emerald {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 15px rgba(34, 197, 94, 0);
+    }
+  }
+
+  /* Fade In Animation */
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Slide In Animation */
+  .animate-slide-in {
+    animation: slideIn 0.4s ease-out forwards;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  /* Scale In Animation */
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out forwards;
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Float Animation */
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  /* Shimmer Loading Effect */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(0, 0%, 10%) 0%,
+      hsl(0, 0%, 15%) 50%,
+      hsl(0, 0%, 10%) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  /* Status Badges */
+  .badge-pending {
+    @apply px-3 py-1 rounded-full text-sm font-medium;
+    background: rgba(234, 179, 8, 0.15);
+    color: hsl(38, 92%, 50%);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+  }
+
+  .badge-approved {
+    @apply px-3 py-1 rounded-full text-sm font-medium;
+    background: rgba(34, 197, 94, 0.15);
+    color: hsl(152, 69%, 52%);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+
+  .badge-rejected {
+    @apply px-3 py-1 rounded-full text-sm font-medium;
+    background: rgba(239, 68, 68, 0.15);
+    color: hsl(0, 70%, 60%);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  /* Scrollbar Styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(0, 0%, 6%);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(0, 0%, 20%);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(152, 40%, 25%);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .delay-100 {
+    animation-delay: 100ms;
+  }
+
+  .delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .delay-400 {
+    animation-delay: 400ms;
+  }
+
+  .delay-500 {
+    animation-delay: 500ms;
   }
 }

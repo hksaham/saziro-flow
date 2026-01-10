@@ -87,9 +87,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_my_coaching_id: { Args: never; Returns: string }
+      get_my_user_id: { Args: never; Returns: string }
       get_user_coaching_id: { Args: never; Returns: string }
       is_approved_user: { Args: never; Returns: boolean }
       is_coaching_teacher: { Args: { coaching_uuid: string }; Returns: boolean }
+      is_teacher_of_coaching: {
+        Args: { p_coaching_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       student_status: "pending" | "approved" | "rejected"

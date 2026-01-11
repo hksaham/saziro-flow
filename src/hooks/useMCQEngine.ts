@@ -1,20 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  collection, 
-  getDocs, 
-  setDoc, 
-  doc, 
+import {
+  collection,
+  getDocs,
+  setDoc,
+  doc,
   getDoc,
   updateDoc,
   serverTimestamp,
-  query,
-  where,
-  orderBy,
-  limit
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { signInAnonymously } from 'firebase/auth';
+import { db, firebaseAuth } from '@/lib/firebase';
 import { seedMCQsToFirestore } from '@/lib/mcqSeeder';
-import type { MCQQuestion, MCQPerformance, MCQState, MCQSet, convertToLegacyFormat } from '@/types/mcq';
+import type { MCQQuestion, MCQPerformance, MCQState, MCQSet } from '@/types/mcq';
 
 export const useMCQEngine = (
   classId: string = 'class_10',
@@ -37,64 +34,96 @@ export const useMCQEngine = (
   // Fetch MCQs from mcq_sets collection (new structure)
   const fetchMCQsFromSets = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
-    
+
+    // STEP 1 — AUTH CONTEXT CHECK (Firebase Auth)
+    console.log('🔐 FIREBASE AUTH DEBUG (pre-fetch):', {
+      currentUser: firebaseAuth.currentUser,
+      uid: firebaseAuth.currentUser?.uid ?? null,
+      isAnonymous: (firebaseAuth.currentUser as any)?.isAnonymous ?? null,
+      providerData: firebaseAuth.currentUser?.providerData ?? null,
+    });
+
+    // Ensure we have a Firebase auth context (required for request.auth-based rules)
+    if (!firebaseAuth.currentUser) {
+      try {
+        console.log('🔐 No Firebase auth session found. Signing in anonymously (web, production)...');
+        await signInAnonymously(firebaseAuth);
+      } catch (authErr: any) {
+        console.error('❌ FIREBASE AUTH SIGN-IN FAILED:', {
+          message: authErr?.message,
+          code: authErr?.code,
+        });
+      }
+    }
+
+    console.log('🔐 FIREBASE AUTH DEBUG (post-auth):', {
+      currentUser: firebaseAuth.currentUser,
+      uid: firebaseAuth.currentUser?.uid ?? null,
+      isAnonymous: (firebaseAuth.currentUser as any)?.isAnonymous ?? null,
+      providerData: firebaseAuth.currentUser?.providerData ?? null,
+    });
+
     console.log('🔍 MCQ ENGINE: Starting to fetch MCQs from Firestore...');
-    console.log('🔍 Collection: mcq_sets');
     console.log('🔍 Firebase Project: studdy-buddy-bd');
-    
+    console.log('🔍 Environment: web, production (not emulator)');
+
+    // STEP 2 — FIRESTORE PATH AUDIT
+    const collectionName = 'mcq_sets';
+    console.log('📁 Firestore read path:', `${collectionName}`);
+
     try {
-      // First, check mcq_sets collection for active sets
-      const setsRef = collection(db, 'mcq_sets');
-      console.log('📁 Querying collection: mcq_sets');
-      
+      const setsRef = collection(db, collectionName);
+      console.log(`📁 Querying collection: ${collectionName}`);
+
       let setsSnapshot;
       try {
         setsSnapshot = await getDocs(setsRef);
         console.log(`✅ Read successful. Found ${setsSnapshot.size} documents.`);
+        console.log('📄 Document IDs:', setsSnapshot.docs.map(d => d.id));
       } catch (readError: any) {
-        console.error('❌ FIRESTORE READ FAILED:', readError.message);
-        console.error('❌ Error code:', readError.code);
-        
-        if (readError.code === 'permission-denied' || readError.message?.includes('permission')) {
-          throw new Error('FIRESTORE PERMISSION DENIED: Your Firestore Security Rules are blocking reads. Please update rules in Firebase Console.');
+        console.error('❌ FIRESTORE READ FAILED:', {
+          message: readError?.message,
+          code: readError?.code,
+        });
+
+        if (readError?.code === 'permission-denied' || readError?.message?.includes('permission')) {
+          throw new Error('FIRESTORE PERMISSION DENIED: Firestore Security Rules are blocking READs to mcq_sets.');
         }
         throw readError;
       }
-      
+
       // If no MCQ sets exist, seed the data
       if (setsSnapshot.empty) {
         console.log('⚠️ No MCQ sets found in Firestore. Attempting to seed from JSON...');
         const result = await seedMCQsToFirestore();
-        
+
         if (!result.success) {
           console.error('❌ Seeding failed:', result.error);
           throw new Error(result.error || 'Failed to seed MCQs');
         }
-        
+
         console.log(`✅ Seeded MCQ set: ${result.setId}`);
-        
+
         // Fetch again after seeding
         const newSnapshot = await getDocs(setsRef);
         console.log(`📊 After seeding, found ${newSnapshot.size} documents`);
-        
+        console.log('📄 Document IDs (after seed):', newSnapshot.docs.map(d => d.id));
+
         if (newSnapshot.empty) {
           throw new Error('Failed to fetch seeded MCQs - documents not found after seed');
         }
-        
-        // Get the first active set
+
         const firstDoc = newSnapshot.docs[0];
         const data = firstDoc.data() as MCQSet;
-        
-        console.log(`📄 Loaded document: ${firstDoc.id}`);
-        console.log(`📊 Questions count: ${data.questions?.length || 0}`);
-        
+
+        console.log('🧾 RAW first document:', { id: firstDoc.id, data });
+
         setSetId(firstDoc.id);
         setMeta(data.meta);
-        
-        // Convert questions to legacy format for UI compatibility
+
         const { convertToLegacyFormat } = await import('@/types/mcq');
         const questions: MCQQuestion[] = data.questions.map(q => convertToLegacyFormat(q));
-        
+
         setState(prev => ({
           ...prev,
           questions,
@@ -102,31 +131,21 @@ export const useMCQEngine = (
         }));
         return;
       }
-      
-      // Get the first active set (could filter by class/subject later)
-      const activeDoc = setsSnapshot.docs.find(doc => {
-        const data = doc.data();
-        return data.status === 'active';
-      }) || setsSnapshot.docs[0];
-      
+
+      // Get the first active set
+      const activeDoc = setsSnapshot.docs.find(d => (d.data() as any)?.status === 'active') || setsSnapshot.docs[0];
       const data = activeDoc.data() as MCQSet;
-      
-      console.log(`📄 Using document: ${activeDoc.id}`);
-      console.log(`📊 Document data:`, {
-        meta: data.meta,
-        questionsCount: data.questions?.length || 0,
-        status: data.status
-      });
-      
+
+      console.log('🧾 RAW active document:', { id: activeDoc.id, data });
+
       setSetId(activeDoc.id);
       setMeta(data.meta);
-      
-      // Convert questions to legacy format for UI compatibility
+
       const { convertToLegacyFormat } = await import('@/types/mcq');
       const questions: MCQQuestion[] = data.questions.map(q => convertToLegacyFormat(q));
-      
+
       console.log(`✅ Loaded MCQ set: ${activeDoc.id} with ${questions.length} questions`);
-      
+
       setState(prev => ({
         ...prev,
         questions,
@@ -134,17 +153,10 @@ export const useMCQEngine = (
       }));
     } catch (err: any) {
       console.error('❌ MCQ ENGINE ERROR:', err);
-      console.error('❌ Error message:', err.message);
-      
-      let errorMessage = 'Failed to load questions. Please try again.';
-      if (err.message?.includes('PERMISSION')) {
-        errorMessage = 'Firestore permission denied. Please update your Firebase Security Rules to allow access to mcq_sets collection.';
-      }
-      
       setState(prev => ({
         ...prev,
         loading: false,
-        error: errorMessage
+        error: err?.message || 'Failed to load questions. Please try again.'
       }));
     }
   }, []);
@@ -209,14 +221,20 @@ export const useMCQEngine = (
   }, []);
 
   // Save performance to Firestore
-  const savePerformance = useCallback(async (userId: string) => {
-    if (!userId) return;
-    
+  const savePerformance = useCallback(async () => {
     try {
-      const perfPath = `users/${userId}/mcqPerformance/${classId}/${subject}/${chapter}`;
+      const firebaseUid = firebaseAuth.currentUser?.uid;
+      if (!firebaseUid) {
+        console.error('❌ Cannot save performance: firebaseAuth.currentUser is null');
+        return;
+      }
+
+      const perfPath = `users/${firebaseUid}/mcqPerformance/${classId}/${subject}/${chapter}`;
+      console.log('🧾 Firestore write path (performance):', perfPath);
+
       const perfRef = doc(db, perfPath);
       const perfSnap = await getDoc(perfRef);
-      
+
       if (perfSnap.exists()) {
         const existing = perfSnap.data() as MCQPerformance;
         await updateDoc(perfRef, {
@@ -233,10 +251,13 @@ export const useMCQEngine = (
           lastAttemptedAt: serverTimestamp()
         });
       }
-      
-      console.log('Performance saved successfully');
-    } catch (err) {
-      console.error('Error saving performance:', err);
+
+      console.log('✅ Performance saved successfully');
+    } catch (err: any) {
+      console.error('❌ Error saving performance:', {
+        message: err?.message,
+        code: err?.code,
+      });
     }
   }, [classId, subject, chapter, state.totalAnswered, state.score]);
 

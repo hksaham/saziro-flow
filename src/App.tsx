@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Pending from "./pages/Pending";
 import Dashboard from "./pages/Dashboard";
+import MCQs from "./pages/MCQs";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,6 +34,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/mcqs"
+                element={
+                  <ProtectedRoute>
+                    <MCQs />
                   </ProtectedRoute>
                 }
               />

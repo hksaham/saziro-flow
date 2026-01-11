@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTone } from '@/contexts/ToneContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,6 +37,7 @@ const streak = 0;
 const mcqsToday = 0;
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const { profile, signOut, coachingId, isTeacher } = useAuth();
   const { t } = useTone();
   const [coaching, setCoaching] = useState<Coaching | null>(null);
@@ -302,6 +304,7 @@ const Dashboard = () => {
                     type="mcqs"
                     label={t.mcqs}
                     isActive={true}
+                    onClick={() => navigate('/mcqs')}
                   />
                   <FeatureCard
                     type="cq-explainer"

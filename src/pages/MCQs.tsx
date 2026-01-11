@@ -20,7 +20,7 @@ const MCQs = () => {
     isCorrect: boolean;
   }[]>([]);
   
-  const mcqEngine = useMCQEngine('class_10', 'physics', 'chapter_1');
+  const mcqEngine = useMCQEngine('class_10', 'Science', 'chapter_1');
   
   const {
     questions,
@@ -28,6 +28,8 @@ const MCQs = () => {
     error,
     score,
     totalAnswered,
+    meta,
+    setId,
     savePerformance,
     resetQuiz
   } = mcqEngine;
@@ -99,10 +101,10 @@ const MCQs = () => {
     <div className="min-h-screen bg-background bg-pattern">
       {phase === 'landing' && (
         <MCQLanding
-          subject="Physics"
-          chapter="Chapter 1: Laws of Motion"
+          subject={meta?.subject || 'Science'}
+          chapter={`Class ${meta?.class || '10'} - ${meta?.board || 'SSC'} Board`}
           totalQuestions={questions.length}
-          totalTime={questions.length * 50}
+          totalTime={questions.length * (meta?.timePerQuestion || 50)}
           xpReward={questions.length * 10}
           onStart={handleStartTest}
           onChangeChapter={handleBackToDashboard}

@@ -6,38 +6,19 @@ import {
   doc, 
   getDoc,
   updateDoc,
-  serverTimestamp 
+  serverTimestamp,
+  query,
+  where,
+  orderBy,
+  limit
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { MCQQuestion, MCQPerformance, MCQState } from '@/types/mcq';
-
-const SAMPLE_MCQS: Omit<MCQQuestion, 'id'>[] = [
-  {
-    question: "What is the SI unit of force?",
-    options: ["Newton", "Joule", "Watt", "Pascal"],
-    correctIndex: 0,
-    explanation: "Force is measured in Newton (N).",
-    difficulty: "easy"
-  },
-  {
-    question: "Which law explains action and reaction?",
-    options: ["First Law of Motion", "Second Law of Motion", "Third Law of Motion", "Law of Gravitation"],
-    correctIndex: 2,
-    explanation: "Newton's Third Law states that every action has an equal and opposite reaction.",
-    difficulty: "easy"
-  },
-  {
-    question: "If mass is constant, force is proportional to?",
-    options: ["Velocity", "Acceleration", "Momentum", "Energy"],
-    correctIndex: 1,
-    explanation: "According to F = ma, force is proportional to acceleration.",
-    difficulty: "medium"
-  }
-];
+import { seedMCQsToFirestore } from '@/lib/mcqSeeder';
+import type { MCQQuestion, MCQPerformance, MCQState, MCQSet, convertToLegacyFormat } from '@/types/mcq';
 
 export const useMCQEngine = (
   classId: string = 'class_10',
-  subject: string = 'physics',
+  subject: string = 'Science',
   chapter: string = 'chapter_1'
 ) => {
   const [state, setState] = useState<MCQState>({
@@ -50,61 +31,70 @@ export const useMCQEngine = (
     loading: true,
     error: null
   });
+  const [meta, setMeta] = useState<MCQSet['meta'] | null>(null);
+  const [setId, setSetId] = useState<string | null>(null);
 
-  const questionsPath = `mcqs/${classId}/${subject}/${chapter}/questions`;
-
-  // Seed sample MCQs if database is empty
-  const seedMCQs = useCallback(async () => {
-    try {
-      const questionsRef = collection(db, questionsPath);
-      
-      for (let i = 0; i < SAMPLE_MCQS.length; i++) {
-        const mcq = SAMPLE_MCQS[i];
-        const docRef = doc(questionsRef, `q${i + 1}`);
-        await setDoc(docRef, mcq);
-      }
-      
-      console.log('Sample MCQs seeded successfully');
-      return true;
-    } catch (err) {
-      console.error('Error seeding MCQs:', err);
-      return false;
-    }
-  }, [questionsPath]);
-
-  // Fetch MCQs from Firestore
-  const fetchMCQs = useCallback(async () => {
+  // Fetch MCQs from mcq_sets collection (new structure)
+  const fetchMCQsFromSets = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      const questionsRef = collection(db, questionsPath);
-      const snapshot = await getDocs(questionsRef);
+      // First, check mcq_sets collection for active sets
+      const setsRef = collection(db, 'mcq_sets');
+      const setsSnapshot = await getDocs(setsRef);
       
-      // If no MCQs exist, seed sample data
-      if (snapshot.empty) {
-        console.log('No MCQs found, seeding sample data...');
-        const seeded = await seedMCQs();
-        if (seeded) {
-          // Fetch again after seeding
-          const newSnapshot = await getDocs(questionsRef);
-          const questions: MCQQuestion[] = newSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as MCQQuestion[];
-          
-          setState(prev => ({
-            ...prev,
-            questions,
-            loading: false
-          }));
-          return;
+      // If no MCQ sets exist, seed the data
+      if (setsSnapshot.empty) {
+        console.log('No MCQ sets found, seeding from JSON...');
+        const result = await seedMCQsToFirestore();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to seed MCQs');
         }
+        
+        console.log(`✅ Seeded MCQ set: ${result.setId}`);
+        
+        // Fetch again after seeding
+        const newSnapshot = await getDocs(setsRef);
+        if (newSnapshot.empty) {
+          throw new Error('Failed to fetch seeded MCQs');
+        }
+        
+        // Get the first active set
+        const firstDoc = newSnapshot.docs[0];
+        const data = firstDoc.data() as MCQSet;
+        
+        setSetId(firstDoc.id);
+        setMeta(data.meta);
+        
+        // Convert questions to legacy format for UI compatibility
+        const { convertToLegacyFormat } = await import('@/types/mcq');
+        const questions: MCQQuestion[] = data.questions.map(q => convertToLegacyFormat(q));
+        
+        setState(prev => ({
+          ...prev,
+          questions,
+          loading: false
+        }));
+        return;
       }
       
-      const questions: MCQQuestion[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as MCQQuestion[];
+      // Get the first active set (could filter by class/subject later)
+      const activeDoc = setsSnapshot.docs.find(doc => {
+        const data = doc.data();
+        return data.status === 'active';
+      }) || setsSnapshot.docs[0];
+      
+      const data = activeDoc.data() as MCQSet;
+      
+      setSetId(activeDoc.id);
+      setMeta(data.meta);
+      
+      // Convert questions to legacy format for UI compatibility
+      const { convertToLegacyFormat } = await import('@/types/mcq');
+      const questions: MCQQuestion[] = data.questions.map(q => convertToLegacyFormat(q));
+      
+      console.log(`✅ Loaded MCQ set: ${activeDoc.id} with ${questions.length} questions`);
       
       setState(prev => ({
         ...prev,
@@ -119,7 +109,7 @@ export const useMCQEngine = (
         error: 'Failed to load questions. Please try again.'
       }));
     }
-  }, [questionsPath, seedMCQs]);
+  }, []);
 
   // Select an option
   const selectOption = useCallback((optionIndex: number) => {
@@ -214,8 +204,8 @@ export const useMCQEngine = (
 
   // Fetch MCQs on mount
   useEffect(() => {
-    fetchMCQs();
-  }, [fetchMCQs]);
+    fetchMCQsFromSets();
+  }, [fetchMCQsFromSets]);
 
   const currentQuestion = state.questions[state.currentIndex] || null;
   const isLastQuestion = state.currentIndex === state.questions.length - 1;
@@ -230,12 +220,14 @@ export const useMCQEngine = (
     isLastQuestion,
     isFirstQuestion,
     progress,
+    meta,
+    setId,
     selectOption,
     submitAnswer,
     nextQuestion,
     prevQuestion,
     resetQuiz,
     savePerformance,
-    refetch: fetchMCQs
+    refetch: fetchMCQsFromSets
   };
 };

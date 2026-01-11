@@ -1,0 +1,914 @@
+{
+"meta": {
+"board": "SSC",
+"class": "10",
+"subject": "Science",
+"totalQuestions": 60,
+"timePerQuestion": 50,
+"difficulty": "medium",
+"createdFor": "Study Buddy BD",
+"type": "daily-test"
+},
+"questions": [
+{
+"id": "Q1",
+"question": "Which physical quantity is measured by an ammeter?",
+"options": {
+"A": "Voltage",
+"B": "Current",
+"C": "Resistance",
+"D": "Power"
+},
+"correctAnswer": "B",
+"explanation": "An ammeter measures the flow of electric current in a circuit.",
+"chapter": "Electricity",
+"topic": "Electric Current",
+"marks": 1
+},
+{
+"id": "Q2",
+"question": "The SI unit of force is:",
+"options": {
+"A": "Dyne",
+"B": "Pascal",
+"C": "Newton",
+"D": "Joule"
+},
+"correctAnswer": "C",
+"explanation": "Force is measured in newton according to the SI system.",
+"chapter": "Motion",
+"topic": "Force",
+"marks": 1
+},
+{
+"id": "Q3",
+"question": "Which lens is used to correct myopia?",
+"options": {
+"A": "Convex lens",
+"B": "Concave lens",
+"C": "Cylindrical lens",
+"D": "Bifocal lens"
+},
+"correctAnswer": "B",
+"explanation": "Concave lenses diverge light to correct short-sightedness.",
+"chapter": "Light",
+"topic": "Defects of Vision",
+"marks": 1
+},
+{
+"id": "Q4",
+"question": "What is the acceleration due to gravity on Earth (approximate)?",
+"options": {
+"A": "8.9 m/s²",
+"B": "9.8 m/s²",
+"C": "10.8 m/s²",
+"D": "12.0 m/s²"
+},
+"correctAnswer": "B",
+"explanation": "Standard gravitational acceleration is about 9.8 m/s².",
+"chapter": "Motion",
+"topic": "Gravitation",
+"marks": 1
+},
+{
+"id": "Q5",
+"question": "Which wave does not require a medium to travel?",
+"options": {
+"A": "Sound wave",
+"B": "Water wave",
+"C": "Light wave",
+"D": "Seismic wave"
+},
+"correctAnswer": "C",
+"explanation": "Light is an electromagnetic wave and can travel in vacuum.",
+"chapter": "Light",
+"topic": "Nature of Light",
+"marks": 1
+},
+{
+"id": "Q6",
+"question": "Which gas is produced when zinc reacts with hydrochloric acid?",
+"options": {
+"A": "Oxygen",
+"B": "Carbon dioxide",
+"C": "Hydrogen",
+"D": "Nitrogen"
+},
+"correctAnswer": "C",
+"explanation": "Zinc and hydrochloric acid produce hydrogen gas.",
+"chapter": "Chemical Reactions",
+"topic": "Metal-Acid Reaction",
+"marks": 1
+},
+{
+"id": "Q7",
+"question": "The pH value of a neutral solution is:",
+"options": {
+"A": "0",
+"B": "7",
+"C": "14",
+"D": "5"
+},
+"correctAnswer": "B",
+"explanation": "A neutral solution has equal H⁺ and OH⁻ ions giving pH 7.",
+"chapter": "Acids and Bases",
+"topic": "pH Scale",
+"marks": 1
+},
+{
+"id": "Q8",
+"question": "Which substance is used as a catalyst in the contact process?",
+"options": {
+"A": "Iron",
+"B": "Platinum",
+"C": "Vanadium pentoxide",
+"D": "Nickel"
+},
+"correctAnswer": "C",
+"explanation": "Vanadium pentoxide is used in sulfuric acid manufacture.",
+"chapter": "Industrial Chemistry",
+"topic": "Contact Process",
+"marks": 1
+},
+{
+"id": "Q9",
+"question": "What is the chemical formula of calcium carbonate?",
+"options": {
+"A": "CaCO₃",
+"B": "CaCl₂",
+"C": "CaO",
+"D": "CaSO₄"
+},
+"correctAnswer": "A",
+"explanation": "Calcium carbonate consists of Ca²⁺ and CO₃²⁻ ions.",
+"chapter": "Inorganic Chemistry",
+"topic": "Chemical Formula",
+"marks": 1
+},
+{
+"id": "Q10",
+"question": "Which element is essential for rusting of iron?",
+"options": {
+"A": "Nitrogen",
+"B": "Hydrogen",
+"C": "Oxygen",
+"D": "Carbon"
+},
+"correctAnswer": "C",
+"explanation": "Rusting requires oxygen and moisture.",
+"chapter": "Chemical Reactions",
+"topic": "Corrosion",
+"marks": 1
+},
+{
+"id": "Q11",
+"question": "The smallest unit of life is:",
+"options": {
+"A": "Tissue",
+"B": "Organ",
+"C": "Cell",
+"D": "System"
+},
+"correctAnswer": "C",
+"explanation": "Cells are the basic structural and functional units of life.",
+"chapter": "Cell Biology",
+"topic": "Cell Structure",
+"marks": 1
+},
+{
+"id": "Q12",
+"question": "Which organelle is known as the powerhouse of the cell?",
+"options": {
+"A": "Nucleus",
+"B": "Mitochondria",
+"C": "Ribosome",
+"D": "Golgi body"
+},
+"correctAnswer": "B",
+"explanation": "Mitochondria produce energy through respiration.",
+"chapter": "Cell Biology",
+"topic": "Cell Organelles",
+"marks": 1
+},
+{
+"id": "Q13",
+"question": "Photosynthesis mainly occurs in which part of a plant?",
+"options": {
+"A": "Root",
+"B": "Stem",
+"C": "Leaf",
+"D": "Flower"
+},
+"correctAnswer": "C",
+"explanation": "Leaves contain chlorophyll for photosynthesis.",
+"chapter": "Plant Physiology",
+"topic": "Photosynthesis",
+"marks": 1
+},
+{
+"id": "Q14",
+"question": "Which pigment is responsible for photosynthesis?",
+"options": {
+"A": "Carotene",
+"B": "Xanthophyll",
+"C": "Chlorophyll",
+"D": "Anthocyanin"
+},
+"correctAnswer": "C",
+"explanation": "Chlorophyll absorbs light energy for photosynthesis.",
+"chapter": "Plant Physiology",
+"topic": "Photosynthetic Pigments",
+"marks": 1
+},
+{
+"id": "Q15",
+"question": "Which gas is released during photosynthesis?",
+"options": {
+"A": "Carbon dioxide",
+"B": "Oxygen",
+"C": "Nitrogen",
+"D": "Hydrogen"
+},
+"correctAnswer": "B",
+"explanation": "Oxygen is released as a by-product of photosynthesis.",
+"chapter": "Plant Physiology",
+"topic": "Photosynthesis",
+"marks": 1
+},
+{
+"id": "Q16",
+"question": "Which blood cells help in clotting?",
+"options": {
+"A": "RBC",
+"B": "WBC",
+"C": "Platelets",
+"D": "Plasma"
+},
+"correctAnswer": "C",
+"explanation": "Platelets help stop bleeding by clot formation.",
+"chapter": "Human Physiology",
+"topic": "Blood",
+"marks": 1
+},
+{
+"id": "Q17",
+"question": "The normal body temperature of a human is:",
+"options": {
+"A": "35°C",
+"B": "36°C",
+"C": "37°C",
+"D": "38°C"
+},
+"correctAnswer": "C",
+"explanation": "Normal human body temperature is about 37°C.",
+"chapter": "Human Physiology",
+"topic": "Body Regulation",
+"marks": 1
+},
+{
+"id": "Q18",
+"question": "Which organ filters blood in the human body?",
+"options": {
+"A": "Liver",
+"B": "Heart",
+"C": "Kidney",
+"D": "Lung"
+},
+"correctAnswer": "C",
+"explanation": "Kidneys filter waste from blood to form urine.",
+"chapter": "Human Physiology",
+"topic": "Excretion",
+"marks": 1
+},
+{
+"id": "Q19",
+"question": "Which vitamin is produced in the skin by sunlight?",
+"options": {
+"A": "Vitamin A",
+"B": "Vitamin B",
+"C": "Vitamin C",
+"D": "Vitamin D"
+},
+"correctAnswer": "D",
+"explanation": "Sunlight helps synthesize vitamin D in skin.",
+"chapter": "Nutrition",
+"topic": "Vitamins",
+"marks": 1
+},
+{
+"id": "Q20",
+"question": "Which disease is caused by deficiency of iodine?",
+"options": {
+"A": "Rickets",
+"B": "Scurvy",
+"C": "Goitre",
+"D": "Anaemia"
+},
+"correctAnswer": "C",
+"explanation": "Iodine deficiency causes enlargement of thyroid gland.",
+"chapter": "Nutrition",
+"topic": "Deficiency Diseases",
+"marks": 1
+},
+{
+"id": "Q21",
+"question": "What type of joint is present in the elbow?",
+"options": {
+"A": "Ball and socket",
+"B": "Hinge",
+"C": "Pivot",
+"D": "Gliding"
+},
+"correctAnswer": "B",
+"explanation": "Elbow allows movement in one plane like a hinge.",
+"chapter": "Human Physiology",
+"topic": "Skeletal System",
+"marks": 1
+},
+{
+"id": "Q22",
+"question": "Which organ controls all activities of the body?",
+"options": {
+"A": "Heart",
+"B": "Brain",
+"C": "Spinal cord",
+"D": "Nerve"
+},
+"correctAnswer": "B",
+"explanation": "The brain is the main control center of the body.",
+"chapter": "Human Physiology",
+"topic": "Nervous System",
+"marks": 1
+},
+{
+"id": "Q23",
+"question": "What is the main function of red blood cells?",
+"options": {
+"A": "Clotting",
+"B": "Defense",
+"C": "Transport oxygen",
+"D": "Digestion"
+},
+"correctAnswer": "C",
+"explanation": "RBCs carry oxygen using hemoglobin.",
+"chapter": "Human Physiology",
+"topic": "Blood",
+"marks": 1
+},
+{
+"id": "Q24",
+"question": "Which hormone regulates blood sugar level?",
+"options": {
+"A": "Thyroxine",
+"B": "Insulin",
+"C": "Adrenaline",
+"D": "Estrogen"
+},
+"correctAnswer": "B",
+"explanation": "Insulin controls glucose level in blood.",
+"chapter": "Human Physiology",
+"topic": "Endocrine System",
+"marks": 1
+},
+{
+"id": "Q25",
+"question": "Which gas is mainly responsible for global warming?",
+"options": {
+"A": "Oxygen",
+"B": "Nitrogen",
+"C": "Carbon dioxide",
+"D": "Hydrogen"
+},
+"correctAnswer": "C",
+"explanation": "CO₂ traps heat causing greenhouse effect.",
+"chapter": "Environment",
+"topic": "Global Warming",
+"marks": 1
+},
+{
+"id": "Q26",
+"question": "Which process converts liquid into gas?",
+"options": {
+"A": "Condensation",
+"B": "Freezing",
+"C": "Evaporation",
+"D": "Melting"
+},
+"correctAnswer": "C",
+"explanation": "Evaporation changes liquid into vapor.",
+"chapter": "Matter",
+"topic": "Change of State",
+"marks": 1
+},
+{
+"id": "Q27",
+"question": "Which instrument measures atmospheric pressure?",
+"options": {
+"A": "Thermometer",
+"B": "Barometer",
+"C": "Hygrometer",
+"D": "Anemometer"
+},
+"correctAnswer": "B",
+"explanation": "Barometer is used to measure air pressure.",
+"chapter": "Atmosphere",
+"topic": "Air Pressure",
+"marks": 1
+},
+{
+"id": "Q28",
+"question": "Which part of the ear helps in balancing the body?",
+"options": {
+"A": "Cochlea",
+"B": "Eardrum",
+"C": "Semicircular canals",
+"D": "Auditory nerve"
+},
+"correctAnswer": "C",
+"explanation": "Semicircular canals maintain balance.",
+"chapter": "Human Physiology",
+"topic": "Sense Organs",
+"marks": 1
+},
+{
+"id": "Q29",
+"question": "Which metal is liquid at room temperature?",
+"options": {
+"A": "Iron",
+"B": "Mercury",
+"C": "Aluminium",
+"D": "Copper"
+},
+"correctAnswer": "B",
+"explanation": "Mercury remains liquid at room temperature.",
+"chapter": "Periodic Table",
+"topic": "Properties of Metals",
+"marks": 1
+},
+{
+"id": "Q30",
+"question": "Which acid is present in vinegar?",
+"options": {
+"A": "Citric acid",
+"B": "Sulfuric acid",
+"C": "Acetic acid",
+"D": "Hydrochloric acid"
+},
+"correctAnswer": "C",
+"explanation": "Vinegar contains acetic acid.",
+"chapter": "Acids and Bases",
+"topic": "Organic Acids",
+"marks": 1
+},
+{
+"id": "Q31",
+"question": "Which unit is used to measure electric power?",
+"options": {
+"A": "Volt",
+"B": "Ampere",
+"C": "Watt",
+"D": "Ohm"
+},
+"correctAnswer": "C",
+"explanation": "Electric power is measured in watt.",
+"chapter": "Electricity",
+"topic": "Electric Power",
+"marks": 1
+},
+{
+"id": "Q32",
+"question": "Which process is used by plants to lose excess water?",
+"options": {
+"A": "Respiration",
+"B": "Transpiration",
+"C": "Photosynthesis",
+"D": "Absorption"
+},
+"correctAnswer": "B",
+"explanation": "Transpiration removes excess water through leaves.",
+"chapter": "Plant Physiology",
+"topic": "Transpiration",
+"marks": 1
+},
+{
+"id": "Q33",
+"question": "Which vitamin helps in blood clotting?",
+"options": {
+"A": "Vitamin A",
+"B": "Vitamin B",
+"C": "Vitamin K",
+"D": "Vitamin D"
+},
+"correctAnswer": "C",
+"explanation": "Vitamin K is essential for clotting factors.",
+"chapter": "Nutrition",
+"topic": "Vitamins",
+"marks": 1
+},
+{
+"id": "Q34",
+"question": "Which organ stores bile?",
+"options": {
+"A": "Liver",
+"B": "Gall bladder",
+"C": "Pancreas",
+"D": "Stomach"
+},
+"correctAnswer": "B",
+"explanation": "Gall bladder stores bile produced by liver.",
+"chapter": "Human Physiology",
+"topic": "Digestive System",
+"marks": 1
+},
+{
+"id": "Q35",
+"question": "Which substance speeds up a chemical reaction without being used?",
+"options": {
+"A": "Reactant",
+"B": "Product",
+"C": "Catalyst",
+"D": "Solvent"
+},
+"correctAnswer": "C",
+"explanation": "Catalysts increase reaction rate without consumption.",
+"chapter": "Chemical Reactions",
+"topic": "Catalyst",
+"marks": 1
+},
+{
+"id": "Q36",
+"question": "Which force keeps planets in their orbits?",
+"options": {
+"A": "Magnetic force",
+"B": "Electric force",
+"C": "Gravitational force",
+"D": "Frictional force"
+},
+"correctAnswer": "C",
+"explanation": "Gravitational force provides centripetal force.",
+"chapter": "Motion",
+"topic": "Gravitation",
+"marks": 1
+},
+{
+"id": "Q37",
+"question": "Which part of the plant conducts water?",
+"options": {
+"A": "Phloem",
+"B": "Xylem",
+"C": "Cambium",
+"D": "Cortex"
+},
+"correctAnswer": "B",
+"explanation": "Xylem transports water and minerals.",
+"chapter": "Plant Anatomy",
+"topic": "Transport System",
+"marks": 1
+},
+{
+"id": "Q38",
+"question": "Which organ produces insulin?",
+"options": {
+"A": "Liver",
+"B": "Pancreas",
+"C": "Kidney",
+"D": "Stomach"
+},
+"correctAnswer": "B",
+"explanation": "Pancreas secretes insulin hormone.",
+"chapter": "Human Physiology",
+"topic": "Endocrine System",
+"marks": 1
+},
+{
+"id": "Q39",
+"question": "Which gas is essential for respiration?",
+"options": {
+"A": "Nitrogen",
+"B": "Carbon dioxide",
+"C": "Oxygen",
+"D": "Hydrogen"
+},
+"correctAnswer": "C",
+"explanation": "Oxygen is required to release energy from food.",
+"chapter": "Human Physiology",
+"topic": "Respiration",
+"marks": 1
+},
+{
+"id": "Q40",
+"question": "Which phenomenon explains splitting of white light?",
+"options": {
+"A": "Reflection",
+"B": "Refraction",
+"C": "Dispersion",
+"D": "Diffraction"
+},
+"correctAnswer": "C",
+"explanation": "Dispersion separates white light into colors.",
+"chapter": "Light",
+"topic": "Dispersion of Light",
+"marks": 1
+},
+{
+"id": "Q41",
+"question": "Which nutrient is the main source of energy?",
+"options": {
+"A": "Protein",
+"B": "Vitamin",
+"C": "Carbohydrate",
+"D": "Mineral"
+},
+"correctAnswer": "C",
+"explanation": "Carbohydrates provide quick energy.",
+"chapter": "Nutrition",
+"topic": "Food Nutrients",
+"marks": 1
+},
+{
+"id": "Q42",
+"question": "Which type of energy is stored in food?",
+"options": {
+"A": "Heat energy",
+"B": "Chemical energy",
+"C": "Light energy",
+"D": "Sound energy"
+},
+"correctAnswer": "B",
+"explanation": "Food stores energy in chemical bonds.",
+"chapter": "Energy",
+"topic": "Forms of Energy",
+"marks": 1
+},
+{
+"id": "Q43",
+"question": "Which part of the flower develops into fruit?",
+"options": {
+"A": "Sepal",
+"B": "Petal",
+"C": "Ovary",
+"D": "Anther"
+},
+"correctAnswer": "C",
+"explanation": "Ovary enlarges to form fruit after fertilization.",
+"chapter": "Plant Reproduction",
+"topic": "Flower Structure",
+"marks": 1
+},
+{
+"id": "Q44",
+"question": "Which blood group is known as universal donor?",
+"options": {
+"A": "A",
+"B": "B",
+"C": "AB",
+"D": "O"
+},
+"correctAnswer": "D",
+"explanation": "O group blood can be donated to all groups.",
+"chapter": "Human Physiology",
+"topic": "Blood Group",
+"marks": 1
+},
+{
+"id": "Q45",
+"question": "Which instrument is used to see distant objects clearly?",
+"options": {
+"A": "Microscope",
+"B": "Periscope",
+"C": "Telescope",
+"D": "Magnifying glass"
+},
+"correctAnswer": "C",
+"explanation": "Telescope is used for viewing distant objects.",
+"chapter": "Light",
+"topic": "Optical Instruments",
+"marks": 1
+},
+{
+"id": "Q46",
+"question": "Which process produces new plants from seeds?",
+"options": {
+"A": "Pollination",
+"B": "Fertilization",
+"C": "Germination",
+"D": "Propagation"
+},
+"correctAnswer": "C",
+"explanation": "Germination is the growth of seed into plant.",
+"chapter": "Plant Reproduction",
+"topic": "Germination",
+"marks": 1
+},
+{
+"id": "Q47",
+"question": "Which metal is used for making electric wires?",
+"options": {
+"A": "Iron",
+"B": "Aluminium",
+"C": "Copper",
+"D": "Zinc"
+},
+"correctAnswer": "C",
+"explanation": "Copper is a good conductor of electricity.",
+"chapter": "Electricity",
+"topic": "Conductors",
+"marks": 1
+},
+{
+"id": "Q48",
+"question": "Which organ helps in breathing?",
+"options": {
+"A": "Heart",
+"B": "Lungs",
+"C": "Kidneys",
+"D": "Liver"
+},
+"correctAnswer": "B",
+"explanation": "Lungs exchange oxygen and carbon dioxide.",
+"chapter": "Human Physiology",
+"topic": "Respiration",
+"marks": 1
+},
+{
+"id": "Q49",
+"question": "Which part of the brain controls balance?",
+"options": {
+"A": "Cerebrum",
+"B": "Medulla",
+"C": "Cerebellum",
+"D": "Pons"
+},
+"correctAnswer": "C",
+"explanation": "Cerebellum coordinates movement and balance.",
+"chapter": "Human Physiology",
+"topic": "Nervous System",
+"marks": 1
+},
+{
+"id": "Q50",
+"question": "Which chemical is used to kill germs in drinking water?",
+"options": {
+"A": "Chlorine",
+"B": "Oxygen",
+"C": "Nitrogen",
+"D": "Carbon"
+},
+"correctAnswer": "A",
+"explanation": "Chlorine disinfects drinking water.",
+"chapter": "Chemistry in Daily Life",
+"topic": "Water Treatment",
+"marks": 1
+},
+{
+"id": "Q51",
+"question": "Which process breaks down food into simpler substances?",
+"options": {
+"A": "Respiration",
+"B": "Digestion",
+"C": "Excretion",
+"D": "Absorption"
+},
+"correctAnswer": "B",
+"explanation": "Digestion converts food into absorbable form.",
+"chapter": "Human Physiology",
+"topic": "Digestive System",
+"marks": 1
+},
+{
+"id": "Q52",
+"question": "Which part of the plant absorbs water from soil?",
+"options": {
+"A": "Leaf",
+"B": "Stem",
+"C": "Root",
+"D": "Flower"
+},
+"correctAnswer": "C",
+"explanation": "Roots absorb water and minerals.",
+"chapter": "Plant Anatomy",
+"topic": "Root System",
+"marks": 1
+},
+{
+"id": "Q53",
+"question": "Which substance turns blue litmus red?",
+"options": {
+"A": "Salt",
+"B": "Base",
+"C": "Acid",
+"D": "Water"
+},
+"correctAnswer": "C",
+"explanation": "Acids change blue litmus to red.",
+"chapter": "Acids and Bases",
+"topic": "Indicators",
+"marks": 1
+},
+{
+"id": "Q54",
+"question": "Which type of mirror forms a real image?",
+"options": {
+"A": "Plane mirror",
+"B": "Convex mirror",
+"C": "Concave mirror",
+"D": "None"
+},
+"correctAnswer": "C",
+"explanation": "Concave mirror can form real images.",
+"chapter": "Light",
+"topic": "Reflection of Light",
+"marks": 1
+},
+{
+"id": "Q55",
+"question": "Which process is responsible for breathing in humans?",
+"options": {
+"A": "Photosynthesis",
+"B": "Respiration",
+"C": "Transpiration",
+"D": "Circulation"
+},
+"correctAnswer": "B",
+"explanation": "Respiration involves breathing and energy release.",
+"chapter": "Human Physiology",
+"topic": "Respiration",
+"marks": 1
+},
+{
+"id": "Q56",
+"question": "Which vitamin prevents night blindness?",
+"options": {
+"A": "Vitamin A",
+"B": "Vitamin B",
+"C": "Vitamin C",
+"D": "Vitamin D"
+},
+"correctAnswer": "A",
+"explanation": "Vitamin A maintains healthy vision.",
+"chapter": "Nutrition",
+"topic": "Vitamins",
+"marks": 1
+},
+{
+"id": "Q57",
+"question": "Which energy transformation occurs in an electric bulb?",
+"options": {
+"A": "Electrical to mechanical",
+"B": "Electrical to heat and light",
+"C": "Chemical to electrical",
+"D": "Mechanical to electrical"
+},
+"correctAnswer": "B",
+"explanation": "Bulb converts electrical energy into heat and light.",
+"chapter": "Energy",
+"topic": "Energy Transformation",
+"marks": 1
+},
+{
+"id": "Q58",
+"question": "Which part of blood fights disease?",
+"options": {
+"A": "Plasma",
+"B": "Platelets",
+"C": "RBC",
+"D": "WBC"
+},
+"correctAnswer": "D",
+"explanation": "White blood cells defend against pathogens.",
+"chapter": "Human Physiology",
+"topic": "Blood",
+"marks": 1
+},
+{
+"id": "Q59",
+"question": "Which force opposes motion between two surfaces?",
+"options": {
+"A": "Gravitational force",
+"B": "Magnetic force",
+"C": "Frictional force",
+"D": "Electric force"
+},
+"correctAnswer": "C",
+"explanation": "Friction resists relative motion of surfaces.",
+"chapter": "Motion",
+"topic": "Friction",
+"marks": 1
+},
+{
+"id": "Q60",
+"question": "Which gas is used in fire extinguishers?",
+"options": {
+"A": "Oxygen",
+"B": "Nitrogen",
+"C": "Carbon dioxide",
+"D": "Hydrogen"
+},
+"correctAnswer": "C",
+"explanation": "CO₂ does not support combustion and smothers fire.",
+"chapter": "Chemistry in Daily Life",
+"topic": "Fire Control",
+"marks": 1
+}
+]
+}

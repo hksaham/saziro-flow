@@ -8,8 +8,7 @@ import {
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
-import { db, firebaseAuth } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { seedMCQsToFirestore } from '@/lib/mcqSeeder';
 import type { MCQQuestion, MCQPerformance, MCQState, MCQSet } from '@/types/mcq';
 
@@ -35,41 +34,12 @@ export const useMCQEngine = (
   const fetchMCQsFromSets = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
-    // STEP 1 — AUTH CONTEXT CHECK (Firebase Auth)
-    console.log('🔐 FIREBASE AUTH DEBUG (pre-fetch):', {
-      currentUser: firebaseAuth.currentUser,
-      uid: firebaseAuth.currentUser?.uid ?? null,
-      isAnonymous: (firebaseAuth.currentUser as any)?.isAnonymous ?? null,
-      providerData: firebaseAuth.currentUser?.providerData ?? null,
-    });
-
-    // Ensure we have a Firebase auth context (required for request.auth-based rules)
-    if (!firebaseAuth.currentUser) {
-      try {
-        console.log('🔐 No Firebase auth session found. Signing in anonymously (web, production)...');
-        await signInAnonymously(firebaseAuth);
-      } catch (authErr: any) {
-        console.error('❌ FIREBASE AUTH SIGN-IN FAILED:', {
-          message: authErr?.message,
-          code: authErr?.code,
-        });
-      }
-    }
-
-    console.log('🔐 FIREBASE AUTH DEBUG (post-auth):', {
-      currentUser: firebaseAuth.currentUser,
-      uid: firebaseAuth.currentUser?.uid ?? null,
-      isAnonymous: (firebaseAuth.currentUser as any)?.isAnonymous ?? null,
-      providerData: firebaseAuth.currentUser?.providerData ?? null,
-    });
-
     console.log('🔍 MCQ ENGINE: Starting to fetch MCQs from Firestore...');
     console.log('🔍 Firebase Project: studdy-buddy-bd');
-    console.log('🔍 Environment: web, production (not emulator)');
+    console.log('🔍 Environment: web, production (NO AUTH REQUIRED - open rules)');
 
-    // STEP 2 — FIRESTORE PATH AUDIT
     const collectionName = 'mcq_sets';
-    console.log('📁 Firestore read path:', `${collectionName}`);
+    console.log('📁 Firestore read path:', collectionName);
 
     try {
       const setsRef = collection(db, collectionName);
@@ -220,46 +190,11 @@ export const useMCQEngine = (
     }));
   }, []);
 
-  // Save performance to Firestore
+  // Save performance to Firestore (disabled - no Firebase Auth)
   const savePerformance = useCallback(async () => {
-    try {
-      const firebaseUid = firebaseAuth.currentUser?.uid;
-      if (!firebaseUid) {
-        console.error('❌ Cannot save performance: firebaseAuth.currentUser is null');
-        return;
-      }
-
-      const perfPath = `users/${firebaseUid}/mcqPerformance/${classId}/${subject}/${chapter}`;
-      console.log('🧾 Firestore write path (performance):', perfPath);
-
-      const perfRef = doc(db, perfPath);
-      const perfSnap = await getDoc(perfRef);
-
-      if (perfSnap.exists()) {
-        const existing = perfSnap.data() as MCQPerformance;
-        await updateDoc(perfRef, {
-          totalAttempted: existing.totalAttempted + state.totalAnswered,
-          correct: existing.correct + state.score,
-          wrong: existing.wrong + (state.totalAnswered - state.score),
-          lastAttemptedAt: serverTimestamp()
-        });
-      } else {
-        await setDoc(perfRef, {
-          totalAttempted: state.totalAnswered,
-          correct: state.score,
-          wrong: state.totalAnswered - state.score,
-          lastAttemptedAt: serverTimestamp()
-        });
-      }
-
-      console.log('✅ Performance saved successfully');
-    } catch (err: any) {
-      console.error('❌ Error saving performance:', {
-        message: err?.message,
-        code: err?.code,
-      });
-    }
-  }, [classId, subject, chapter, state.totalAnswered, state.score]);
+    console.log('⚠️ Performance saving disabled (no Firebase Auth)');
+    // Performance tracking can be re-enabled with proper auth later
+  }, []);
 
   // Fetch MCQs on mount
   useEffect(() => {

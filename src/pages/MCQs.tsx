@@ -12,13 +12,22 @@ type MCQPhase = 'landing' | 'test' | 'completion' | 'review';
 
 const MCQs = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile, coachingId } = useAuth();
   const [phase, setPhase] = useState<MCQPhase>('landing');
   const [answeredQuestions, setAnsweredQuestions] = useState<{
     questionIndex: number;
     selectedOption: number;
     isCorrect: boolean;
   }[]>([]);
+
+  useEffect(() => {
+    console.log('🧾 APP AUTH DEBUG (MCQs route):', {
+      user: user ? { id: user.id, email: user.email } : null,
+      uid: user?.id ?? null,
+      role: profile?.role ?? null,
+      coachingId: coachingId ?? null,
+    });
+  }, [user, profile?.role, coachingId]);
   
   const mcqEngine = useMCQEngine('class_10', 'Science', 'chapter_1');
   
@@ -44,9 +53,7 @@ const MCQs = () => {
   };
 
   const handleTestComplete = async () => {
-    if (user?.id) {
-      await savePerformance(user.id);
-    }
+    await savePerformance();
     setPhase('completion');
   };
 

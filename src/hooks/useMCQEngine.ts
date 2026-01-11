@@ -38,17 +38,36 @@ export const useMCQEngine = (
   const fetchMCQsFromSets = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
     
+    console.log('🔍 MCQ ENGINE: Starting to fetch MCQs from Firestore...');
+    console.log('🔍 Collection: mcq_sets');
+    console.log('🔍 Firebase Project: studdy-buddy-bd');
+    
     try {
       // First, check mcq_sets collection for active sets
       const setsRef = collection(db, 'mcq_sets');
-      const setsSnapshot = await getDocs(setsRef);
+      console.log('📁 Querying collection: mcq_sets');
+      
+      let setsSnapshot;
+      try {
+        setsSnapshot = await getDocs(setsRef);
+        console.log(`✅ Read successful. Found ${setsSnapshot.size} documents.`);
+      } catch (readError: any) {
+        console.error('❌ FIRESTORE READ FAILED:', readError.message);
+        console.error('❌ Error code:', readError.code);
+        
+        if (readError.code === 'permission-denied' || readError.message?.includes('permission')) {
+          throw new Error('FIRESTORE PERMISSION DENIED: Your Firestore Security Rules are blocking reads. Please update rules in Firebase Console.');
+        }
+        throw readError;
+      }
       
       // If no MCQ sets exist, seed the data
       if (setsSnapshot.empty) {
-        console.log('No MCQ sets found, seeding from JSON...');
+        console.log('⚠️ No MCQ sets found in Firestore. Attempting to seed from JSON...');
         const result = await seedMCQsToFirestore();
         
         if (!result.success) {
+          console.error('❌ Seeding failed:', result.error);
           throw new Error(result.error || 'Failed to seed MCQs');
         }
         
@@ -56,13 +75,18 @@ export const useMCQEngine = (
         
         // Fetch again after seeding
         const newSnapshot = await getDocs(setsRef);
+        console.log(`📊 After seeding, found ${newSnapshot.size} documents`);
+        
         if (newSnapshot.empty) {
-          throw new Error('Failed to fetch seeded MCQs');
+          throw new Error('Failed to fetch seeded MCQs - documents not found after seed');
         }
         
         // Get the first active set
         const firstDoc = newSnapshot.docs[0];
         const data = firstDoc.data() as MCQSet;
+        
+        console.log(`📄 Loaded document: ${firstDoc.id}`);
+        console.log(`📊 Questions count: ${data.questions?.length || 0}`);
         
         setSetId(firstDoc.id);
         setMeta(data.meta);
@@ -87,6 +111,13 @@ export const useMCQEngine = (
       
       const data = activeDoc.data() as MCQSet;
       
+      console.log(`📄 Using document: ${activeDoc.id}`);
+      console.log(`📊 Document data:`, {
+        meta: data.meta,
+        questionsCount: data.questions?.length || 0,
+        status: data.status
+      });
+      
       setSetId(activeDoc.id);
       setMeta(data.meta);
       
@@ -101,12 +132,19 @@ export const useMCQEngine = (
         questions,
         loading: false
       }));
-    } catch (err) {
-      console.error('Error fetching MCQs:', err);
+    } catch (err: any) {
+      console.error('❌ MCQ ENGINE ERROR:', err);
+      console.error('❌ Error message:', err.message);
+      
+      let errorMessage = 'Failed to load questions. Please try again.';
+      if (err.message?.includes('PERMISSION')) {
+        errorMessage = 'Firestore permission denied. Please update your Firebase Security Rules to allow access to mcq_sets collection.';
+      }
+      
       setState(prev => ({
         ...prev,
         loading: false,
-        error: 'Failed to load questions. Please try again.'
+        error: errorMessage
       }));
     }
   }, []);

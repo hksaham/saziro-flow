@@ -11,6 +11,9 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Pending from "./pages/Pending";
 import Dashboard from "./pages/Dashboard";
+import MCQIntro from "./pages/MCQIntro";
+import MCQAttempt from "./pages/MCQAttempt";
+import MCQResult from "./pages/MCQResult";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,6 +36,30 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/mcq/intro/:type"
+                element={
+                  <ProtectedRoute>
+                    <MCQIntro />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/mcq/attempt/:type"
+                element={
+                  <ProtectedRoute>
+                    <MCQAttempt />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/mcq/result/:attemptId"
+                element={
+                  <ProtectedRoute>
+                    <MCQResult />
                   </ProtectedRoute>
                 }
               />

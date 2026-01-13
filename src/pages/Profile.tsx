@@ -182,7 +182,7 @@ const Profile = () => {
   };
 
   const toneOptions: { value: ToneType; label: string; emoji: string }[] = [
-    { value: 'chill-bro-banglish', label: 'Chill Bro', emoji: '😎' },
+    { value: 'chill-bro', label: 'Chill Bro', emoji: '😎' },
     { value: 'friendly-banglish', label: 'Friendly Banglish', emoji: '🙂' },
     { value: 'formal-bangla', label: 'Formal Bangla', emoji: '📚' },
   ];
@@ -280,12 +280,16 @@ const Profile = () => {
               </p>
               
               <div className="flex flex-wrap gap-2 text-xs">
-                <span className="px-2.5 py-1 rounded-full bg-secondary text-muted-foreground">
-                  Class 10
-                </span>
-                <span className="px-2.5 py-1 rounded-full bg-secondary text-muted-foreground">
-                  Dhaka Board
-                </span>
+                {profile?.student_class && (
+                  <span className="px-2.5 py-1 rounded-full bg-secondary text-muted-foreground capitalize">
+                    {profile.student_class.replace('-', ' ')}
+                  </span>
+                )}
+                {profile?.board && (
+                  <span className="px-2.5 py-1 rounded-full bg-secondary text-muted-foreground capitalize">
+                    {profile.board} Board
+                  </span>
+                )}
                 <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
                   {formatDate(user?.created_at)}

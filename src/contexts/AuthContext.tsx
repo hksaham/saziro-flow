@@ -12,6 +12,9 @@ interface Profile {
   role: UserRole;
   coaching_id: string | null;
   student_status: StudentStatus;
+  student_class: string | null;
+  board: string | null;
+  tone: string | null;
 }
 
 interface AuthContextType {
@@ -23,6 +26,7 @@ interface AuthContextType {
   isStudent: boolean;
   isApproved: boolean;
   isPending: boolean;
+  isOnboarded: boolean;
   coachingId: string | null;
   signUp: (email: string, password: string, fullName: string, role: 'teacher' | 'student', coachingName?: string, inviteToken?: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -210,6 +214,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isStudent = profile?.role === 'student';
   const isApproved = isTeacher || (isStudent && profile?.student_status === 'approved');
   const isPending = isStudent && profile?.student_status === 'pending';
+  const isOnboarded = isTeacher || (isStudent && !!profile?.student_class && !!profile?.board && !!profile?.tone);
   const coachingId = profile?.coaching_id ?? null;
 
   return (
@@ -223,6 +228,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isStudent,
         isApproved,
         isPending,
+        isOnboarded,
         coachingId,
         signUp,
         signIn,

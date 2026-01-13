@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTone } from '@/contexts/ToneContext';
+import { useUserStats } from '@/hooks/useUserStats';
 import { supabase } from '@/integrations/supabase/client';
 import Logo from '@/components/ui/Logo';
 import ToneSelector from '@/components/ui/ToneSelector';
@@ -24,28 +25,23 @@ interface Coaching {
   name: string;
   invite_token: string;
 }
-/**
- * Skeleton Phase - Placeholder Data
- * Future Hook Notes:
- * - XP → /users/{id}/xp
- * - Streak → /users/{id}/streak
- * - Performance → /performance/{date}
- * - Notifications → /notifications/{userId}
- */
-const xp = 0;
-const streak = 0;
-const mcqsToday = 0;
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { profile, signOut, coachingId, isTeacher } = useAuth();
   const { t } = useTone();
+  const { stats, todayPerformance, loading: statsLoading } = useUserStats();
   const [coaching, setCoaching] = useState<Coaching | null>(null);
   const [pendingStudents, setPendingStudents] = useState<PendingStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+
+  // Use stats from hook
+  const xp = stats?.total_xp ?? 0;
+  const streak = stats?.current_streak ?? 0;
+  const mcqsToday = todayPerformance.totalQuestions;
 
   useEffect(() => {
     if (isTeacher && coachingId) {

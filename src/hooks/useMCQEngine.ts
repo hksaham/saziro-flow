@@ -224,41 +224,92 @@ export const useMCQEngine = (
   // FIXED: Save performance to Supabase (with mistake tracking)
   const savePerformance = useCallback(async (
     answeredQuestions: AnsweredQuestion[],
-    mode: 'test' | 'practice'
+    mode: 'test' | 'practice',
+    timeTakenSeconds: number = 0
   ) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
         console.error('❌ Cannot save performance: No authenticated user');
-        return;
+        return { success: false, xpEarned: 0 };
       }
+
+      // Get user's coaching ID
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('coaching_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
       console.log(`📊 Saving performance for user ${user.id}...`);
 
-      // Extract wrong answers for mistake notebook
-      const wrongAnswers = answeredQuestions.filter(q => !q.isCorrect);
-      console.log(`📝 Wrong answers to save: ${wrongAnswers.length}`);
-
-      // Calculate XP earned
       const correctCount = answeredQuestions.filter(q => q.isCorrect).length;
+      const wrongCount = answeredQuestions.filter(q => !q.isCorrect).length;
+      const totalQuestions = answeredQuestions.length;
+      const scorePercentage = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
       const xpEarned = correctCount * 10;
 
-      console.log(`✅ Performance saved: ${correctCount}/${answeredQuestions.length} correct, ${xpEarned} XP earned`);
-      console.log(`📝 Mistakes stored: ${wrongAnswers.length} questions`);
+      // Insert performance record
+      const { data: perfData, error: perfError } = await supabase
+        .from('mcq_performance')
+        .insert({
+          user_id: user.id,
+          coaching_id: profile?.coaching_id,
+          mode,
+          total_questions: totalQuestions,
+          correct_answers: correctCount,
+          wrong_answers: wrongCount,
+          score_percentage: scorePercentage,
+          time_taken_seconds: timeTakenSeconds,
+          xp_earned: xpEarned
+        })
+        .select()
+        .single();
 
-      // Log for verification
-      wrongAnswers.forEach((wa, i) => {
-        console.log(`  Mistake ${i + 1}: Q${wa.questionIndex + 1}, selected ${wa.selectedOption}, correct was ${wa.correctAnswer}`);
-      });
+      if (perfError) {
+        console.error('❌ Error saving performance:', perfError);
+        return { success: false, xpEarned: 0 };
+      }
 
+      console.log(`✅ Performance saved: ${correctCount}/${totalQuestions} correct, ${xpEarned} XP earned`);
+
+      // Save wrong answers for mistake notebook
+      const wrongAnswers = answeredQuestions.filter(q => !q.isCorrect);
+      if (wrongAnswers.length > 0 && perfData) {
+        const wrongAnswerRecords = wrongAnswers.map(wa => {
+          const question = state.questions[wa.questionIndex];
+          return {
+            user_id: user.id,
+            performance_id: perfData.id,
+            question_text: question?.question || `Question ${wa.questionIndex + 1}`,
+            options: question?.options || [],
+            selected_answer: question?.options?.[wa.selectedOption] || String(wa.selectedOption),
+            correct_answer: question?.options?.[wa.correctAnswer] || String(wa.correctAnswer),
+            subject: meta?.subject || 'Unknown'
+          };
+        });
+
+        const { error: wrongError } = await supabase
+          .from('mcq_wrong_answers')
+          .insert(wrongAnswerRecords);
+
+        if (wrongError) {
+          console.error('❌ Error saving wrong answers:', wrongError);
+        } else {
+          console.log(`📝 Saved ${wrongAnswers.length} wrong answers to mistake notebook`);
+        }
+      }
+
+      return { success: true, xpEarned };
     } catch (err: any) {
       console.error('❌ Error saving performance:', {
         message: err?.message,
         code: err?.code,
       });
+      return { success: false, xpEarned: 0 };
     }
-  }, []);
+  }, [state.questions, meta]);
 
   // Fetch MCQs on mount
   useEffect(() => {

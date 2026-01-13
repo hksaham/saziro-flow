@@ -41,6 +41,100 @@ export type Database = {
         }
         Relationships: []
       }
+      mcq_performance: {
+        Row: {
+          coaching_id: string | null
+          correct_answers: number
+          created_at: string
+          id: string
+          mode: string
+          score_percentage: number
+          time_taken_seconds: number
+          total_questions: number
+          user_id: string
+          wrong_answers: number
+          xp_earned: number
+        }
+        Insert: {
+          coaching_id?: string | null
+          correct_answers: number
+          created_at?: string
+          id?: string
+          mode: string
+          score_percentage: number
+          time_taken_seconds?: number
+          total_questions: number
+          user_id: string
+          wrong_answers: number
+          xp_earned?: number
+        }
+        Update: {
+          coaching_id?: string | null
+          correct_answers?: number
+          created_at?: string
+          id?: string
+          mode?: string
+          score_percentage?: number
+          time_taken_seconds?: number
+          total_questions?: number
+          user_id?: string
+          wrong_answers?: number
+          xp_earned?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcq_performance_coaching_id_fkey"
+            columns: ["coaching_id"]
+            isOneToOne: false
+            referencedRelation: "coachings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mcq_wrong_answers: {
+        Row: {
+          correct_answer: string
+          created_at: string
+          id: string
+          options: Json
+          performance_id: string | null
+          question_text: string
+          selected_answer: string
+          subject: string | null
+          user_id: string
+        }
+        Insert: {
+          correct_answer: string
+          created_at?: string
+          id?: string
+          options: Json
+          performance_id?: string | null
+          question_text: string
+          selected_answer: string
+          subject?: string | null
+          user_id: string
+        }
+        Update: {
+          correct_answer?: string
+          created_at?: string
+          id?: string
+          options?: Json
+          performance_id?: string | null
+          question_text?: string
+          selected_answer?: string
+          subject?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcq_wrong_answers_performance_id_fkey"
+            columns: ["performance_id"]
+            isOneToOne: false
+            referencedRelation: "mcq_performance"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           coaching_id: string | null
@@ -75,6 +169,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "profiles_coaching_id_fkey"
+            columns: ["coaching_id"]
+            isOneToOne: false
+            referencedRelation: "coachings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_stats: {
+        Row: {
+          coaching_id: string | null
+          created_at: string
+          current_streak: number
+          id: string
+          last_activity_date: string | null
+          longest_streak: number
+          total_xp: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          coaching_id?: string | null
+          created_at?: string
+          current_streak?: number
+          id?: string
+          last_activity_date?: string | null
+          longest_streak?: number
+          total_xp?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          coaching_id?: string | null
+          created_at?: string
+          current_streak?: number
+          id?: string
+          last_activity_date?: string | null
+          longest_streak?: number
+          total_xp?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_stats_coaching_id_fkey"
             columns: ["coaching_id"]
             isOneToOne: false
             referencedRelation: "coachings"

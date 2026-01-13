@@ -330,6 +330,7 @@ const Dashboard = () => {
                     type="profile"
                     label={t.profile}
                     isActive={true}
+                    onClick={() => navigate('/profile')}
                   />
                 </div>
               </section>

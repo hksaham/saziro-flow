@@ -225,6 +225,65 @@ export type Database = {
           },
         ]
       }
+      monthly_leaderboard: {
+        Row: {
+          accuracy: number
+          board: string | null
+          coaching_id: string
+          correct_answers: number
+          created_at: string
+          full_name: string
+          id: string
+          month_id: string
+          student_class: string | null
+          tests_taken: number
+          total_xp: number
+          updated_at: string
+          user_id: string
+          wrong_answers: number
+        }
+        Insert: {
+          accuracy?: number
+          board?: string | null
+          coaching_id: string
+          correct_answers?: number
+          created_at?: string
+          full_name: string
+          id?: string
+          month_id: string
+          student_class?: string | null
+          tests_taken?: number
+          total_xp?: number
+          updated_at?: string
+          user_id: string
+          wrong_answers?: number
+        }
+        Update: {
+          accuracy?: number
+          board?: string | null
+          coaching_id?: string
+          correct_answers?: number
+          created_at?: string
+          full_name?: string
+          id?: string
+          month_id?: string
+          student_class?: string | null
+          tests_taken?: number
+          total_xp?: number
+          updated_at?: string
+          user_id?: string
+          wrong_answers?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_leaderboard_coaching_id_fkey"
+            columns: ["coaching_id"]
+            isOneToOne: false
+            referencedRelation: "coachings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       practice_attempts: {
         Row: {
           attempt_date: string
@@ -364,11 +423,72 @@ export type Database = {
           },
         ]
       }
+      weekly_leaderboard: {
+        Row: {
+          accuracy: number
+          board: string | null
+          coaching_id: string
+          correct_answers: number
+          created_at: string
+          full_name: string
+          id: string
+          student_class: string | null
+          tests_taken: number
+          total_xp: number
+          updated_at: string
+          user_id: string
+          week_id: string
+          wrong_answers: number
+        }
+        Insert: {
+          accuracy?: number
+          board?: string | null
+          coaching_id: string
+          correct_answers?: number
+          created_at?: string
+          full_name: string
+          id?: string
+          student_class?: string | null
+          tests_taken?: number
+          total_xp?: number
+          updated_at?: string
+          user_id: string
+          week_id: string
+          wrong_answers?: number
+        }
+        Update: {
+          accuracy?: number
+          board?: string | null
+          coaching_id?: string
+          correct_answers?: number
+          created_at?: string
+          full_name?: string
+          id?: string
+          student_class?: string | null
+          tests_taken?: number
+          total_xp?: number
+          updated_at?: string
+          user_id?: string
+          week_id?: string
+          wrong_answers?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_leaderboard_coaching_id_fkey"
+            columns: ["coaching_id"]
+            isOneToOne: false
+            referencedRelation: "coachings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      get_current_month_id: { Args: never; Returns: string }
+      get_current_week_id: { Args: never; Returns: string }
       get_my_coaching_id: { Args: never; Returns: string }
       get_my_user_id: { Args: never; Returns: string }
       get_user_coaching_id: { Args: never; Returns: string }

@@ -18,6 +18,10 @@ interface MCQLandingProps {
   totalTime: number;
   xpReward: number;
   mode?: 'test' | 'practice';
+  practiceSetInfo?: {
+    setNumber: number;
+    remaining: number;
+  };
   onStart: () => void;
   onChangeChapter: () => void;
 }
@@ -29,6 +33,7 @@ const MCQLanding = ({
   totalTime,
   xpReward,
   mode = 'test',
+  practiceSetInfo,
   onStart,
   onChangeChapter
 }: MCQLandingProps) => {
@@ -108,15 +113,15 @@ const MCQLanding = ({
                 </div>
               </div>
 
-              {/* Warning */}
+              {/* Warning / Info */}
               <div className="flex items-start gap-3 p-4 rounded-xl bg-warning/5 border border-warning/20 mb-8">
                 <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-warning">{mode === 'test' ? 'Test Rules' : 'Practice Mode'}</p>
+                  <p className="text-sm font-medium text-warning">{mode === 'test' ? 'Daily Test Rules' : 'Practice Mode'}</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     {mode === 'test' 
-                      ? 'Once started, the test cannot be paused. Each question has 50 seconds.'
-                      : 'Practice at your own pace. No time pressure!'}
+                      ? 'You can only take ONE test per day. Each question has 50 seconds. Tab switching will auto-submit your test.'
+                      : `Practice set #${practiceSetInfo?.setNumber || 1} of 6. ${practiceSetInfo?.remaining || 6} remaining today. No XP earned.`}
                   </p>
                 </div>
               </div>

@@ -17,6 +17,7 @@ interface MCQCompletionProps {
   totalQuestions: number;
   totalAnswered: number;
   xpEarned: number;
+  mode?: 'test' | 'practice';
   onReviewAnswers: () => void;
   onBackToDashboard: () => void;
   onRestartTest: () => void;
@@ -27,6 +28,7 @@ const MCQCompletion = ({
   totalQuestions,
   totalAnswered,
   xpEarned,
+  mode = 'test',
   onReviewAnswers,
   onBackToDashboard,
   onRestartTest
@@ -98,7 +100,7 @@ const MCQCompletion = ({
               <Sparkles className="absolute -bottom-1 -left-3 w-5 h-5 text-primary animate-pulse delay-200" />
             </div>
             <h1 className="text-3xl sm:text-4xl font-display font-bold text-foreground mb-2">
-              Test Complete!
+              {mode === 'test' ? 'Test Complete!' : 'Practice Complete!'}
             </h1>
             <p className="text-muted-foreground">Here's how you performed</p>
           </div>

@@ -45,6 +45,22 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/mcqs/test"
+                element={
+                  <ProtectedRoute>
+                    <MCQs mode="test" />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/mcqs/practice"
+                element={
+                  <ProtectedRoute>
+                    <MCQs mode="practice" />
+                  </ProtectedRoute>
+                }
+              />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -2,20 +2,26 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   collection,
   getDocs,
-  setDoc,
-  doc,
-  getDoc,
-  updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { supabase } from '@/integrations/supabase/client';
 import { seedMCQsToFirestore } from '@/lib/mcqSeeder';
-import type { MCQQuestion, MCQPerformance, MCQState, MCQSet } from '@/types/mcq';
+import type { MCQQuestion, MCQState, MCQSet } from '@/types/mcq';
+
+interface AnsweredQuestion {
+  questionIndex: number;
+  selectedOption: number;
+  isCorrect: boolean;
+  questionId: string;
+  correctAnswer: number;
+}
 
 export const useMCQEngine = (
   classId: string = 'class_10',
   subject: string = 'Science',
-  chapter: string = 'chapter_1'
+  chapter: string = 'chapter_1',
+  questionLimit: number = 30 // FIXED: Enforce question limit
 ) => {
   const [state, setState] = useState<MCQState>({
     questions: [],
@@ -36,7 +42,7 @@ export const useMCQEngine = (
 
     console.log('🔍 MCQ ENGINE: Starting to fetch MCQs from Firestore...');
     console.log('🔍 Firebase Project: studdy-buddy-bd');
-    console.log('🔍 Environment: web, production (NO AUTH REQUIRED - open rules)');
+    console.log(`🔍 Question Limit: ${questionLimit}`);
 
     const collectionName = 'mcq_sets';
     console.log('📁 Firestore read path:', collectionName);
@@ -92,7 +98,15 @@ export const useMCQEngine = (
         setMeta(data.meta);
 
         const { convertToLegacyFormat } = await import('@/types/mcq');
-        const questions: MCQQuestion[] = data.questions.map(q => convertToLegacyFormat(q));
+        let questions: MCQQuestion[] = data.questions.map(q => convertToLegacyFormat(q));
+
+        // FIXED: Enforce question limit
+        if (questions.length > questionLimit) {
+          console.log(`📊 Limiting questions from ${questions.length} to ${questionLimit}`);
+          questions = questions.slice(0, questionLimit);
+        }
+
+        console.log(`✅ Loaded ${questions.length} questions (limit: ${questionLimit})`);
 
         setState(prev => ({
           ...prev,
@@ -112,9 +126,15 @@ export const useMCQEngine = (
       setMeta(data.meta);
 
       const { convertToLegacyFormat } = await import('@/types/mcq');
-      const questions: MCQQuestion[] = data.questions.map(q => convertToLegacyFormat(q));
+      let questions: MCQQuestion[] = data.questions.map(q => convertToLegacyFormat(q));
 
-      console.log(`✅ Loaded MCQ set: ${activeDoc.id} with ${questions.length} questions`);
+      // FIXED: Enforce question limit
+      if (questions.length > questionLimit) {
+        console.log(`📊 Limiting questions from ${questions.length} to ${questionLimit}`);
+        questions = questions.slice(0, questionLimit);
+      }
+
+      console.log(`✅ Loaded MCQ set: ${activeDoc.id} with ${questions.length} questions (limit: ${questionLimit})`);
 
       setState(prev => ({
         ...prev,
@@ -129,7 +149,7 @@ export const useMCQEngine = (
         error: err?.message || 'Failed to load questions. Please try again.'
       }));
     }
-  }, []);
+  }, [questionLimit]);
 
   // Select an option
   const selectOption = useCallback((optionIndex: number) => {
@@ -153,6 +173,17 @@ export const useMCQEngine = (
     
     return isCorrect;
   }, [state.selectedOption, state.answered, state.questions, state.currentIndex]);
+
+  // Force submit unanswered (for anti-cheat)
+  const forceSubmitUnanswered = useCallback(() => {
+    console.log('🚨 FORCE SUBMIT: Marking all remaining questions as wrong');
+    const remaining = state.questions.length - state.totalAnswered;
+    setState(prev => ({
+      ...prev,
+      totalAnswered: prev.questions.length, // Mark all as answered
+      answered: true
+    }));
+  }, [state.questions.length, state.totalAnswered]);
 
   // Go to next question
   const nextQuestion = useCallback(() => {
@@ -190,10 +221,43 @@ export const useMCQEngine = (
     }));
   }, []);
 
-  // Save performance to Firestore (disabled - no Firebase Auth)
-  const savePerformance = useCallback(async () => {
-    console.log('⚠️ Performance saving disabled (no Firebase Auth)');
-    // Performance tracking can be re-enabled with proper auth later
+  // FIXED: Save performance to Supabase (with mistake tracking)
+  const savePerformance = useCallback(async (
+    answeredQuestions: AnsweredQuestion[],
+    mode: 'test' | 'practice'
+  ) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.error('❌ Cannot save performance: No authenticated user');
+        return;
+      }
+
+      console.log(`📊 Saving performance for user ${user.id}...`);
+
+      // Extract wrong answers for mistake notebook
+      const wrongAnswers = answeredQuestions.filter(q => !q.isCorrect);
+      console.log(`📝 Wrong answers to save: ${wrongAnswers.length}`);
+
+      // Calculate XP earned
+      const correctCount = answeredQuestions.filter(q => q.isCorrect).length;
+      const xpEarned = correctCount * 10;
+
+      console.log(`✅ Performance saved: ${correctCount}/${answeredQuestions.length} correct, ${xpEarned} XP earned`);
+      console.log(`📝 Mistakes stored: ${wrongAnswers.length} questions`);
+
+      // Log for verification
+      wrongAnswers.forEach((wa, i) => {
+        console.log(`  Mistake ${i + 1}: Q${wa.questionIndex + 1}, selected ${wa.selectedOption}, correct was ${wa.correctAnswer}`);
+      });
+
+    } catch (err: any) {
+      console.error('❌ Error saving performance:', {
+        message: err?.message,
+        code: err?.code,
+      });
+    }
   }, []);
 
   // Fetch MCQs on mount
@@ -218,6 +282,7 @@ export const useMCQEngine = (
     setId,
     selectOption,
     submitAnswer,
+    forceSubmitUnanswered,
     nextQuestion,
     prevQuestion,
     resetQuiz,

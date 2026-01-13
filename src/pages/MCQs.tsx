@@ -10,7 +10,15 @@ import { Loader2 } from 'lucide-react';
 
 type MCQPhase = 'landing' | 'test' | 'completion' | 'review';
 
-const MCQs = () => {
+interface MCQsProps {
+  mode?: 'test' | 'practice';
+}
+
+// FIXED QUESTION LIMITS
+const TEST_QUESTION_LIMIT = 30;
+const PRACTICE_QUESTION_LIMIT = 10;
+
+const MCQs = ({ mode = 'test' }: MCQsProps) => {
   const navigate = useNavigate();
   const { user, profile, coachingId } = useAuth();
   const [phase, setPhase] = useState<MCQPhase>('landing');
@@ -18,7 +26,16 @@ const MCQs = () => {
     questionIndex: number;
     selectedOption: number;
     isCorrect: boolean;
+    questionId: string;
+    correctAnswer: number;
   }[]>([]);
+
+  // Anti-cheat: Track tab visibility
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [forceSubmit, setForceSubmit] = useState(false);
+
+  // Get question limit based on mode
+  const questionLimit = mode === 'test' ? TEST_QUESTION_LIMIT : PRACTICE_QUESTION_LIMIT;
 
   useEffect(() => {
     console.log('🧾 APP AUTH DEBUG (MCQs route):', {
@@ -26,10 +43,12 @@ const MCQs = () => {
       uid: user?.id ?? null,
       role: profile?.role ?? null,
       coachingId: coachingId ?? null,
+      mode,
+      questionLimit,
     });
-  }, [user, profile?.role, coachingId]);
+  }, [user, profile?.role, coachingId, mode, questionLimit]);
   
-  const mcqEngine = useMCQEngine('class_10', 'Science', 'chapter_1');
+  const mcqEngine = useMCQEngine('class_10', 'Science', 'chapter_1', questionLimit);
   
   const {
     questions,
@@ -43,17 +62,83 @@ const MCQs = () => {
     resetQuiz
   } = mcqEngine;
 
+  // ANTI-CHEAT: Tab visibility detection
+  useEffect(() => {
+    if (phase !== 'test') return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('⚠️ ANTI-CHEAT: Tab switch detected!');
+        setTabSwitchCount(prev => {
+          const newCount = prev + 1;
+          if (newCount >= 3) {
+            console.log('🚨 ANTI-CHEAT: 3 tab switches - forcing submission');
+            setForceSubmit(true);
+          }
+          return newCount;
+        });
+      }
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (phase === 'test') {
+        e.preventDefault();
+        e.returnValue = 'Your test progress will be lost. Are you sure?';
+        return e.returnValue;
+      }
+    };
+
+    // Prevent back navigation during test
+    const handlePopState = (e: PopStateEvent) => {
+      if (phase === 'test') {
+        window.history.pushState(null, '', window.location.href);
+        console.log('⚠️ ANTI-CHEAT: Back navigation blocked');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+    
+    // Push initial state for popstate prevention
+    window.history.pushState(null, '', window.location.href);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [phase]);
+
   // Track answered questions for review
-  const handleQuestionAnswered = useCallback((questionIndex: number, selectedOption: number, isCorrect: boolean) => {
-    setAnsweredQuestions(prev => [...prev, { questionIndex, selectedOption, isCorrect }]);
+  const handleQuestionAnswered = useCallback((
+    questionIndex: number, 
+    selectedOption: number, 
+    isCorrect: boolean,
+    questionId?: string,
+    correctAnswer?: number
+  ) => {
+    setAnsweredQuestions(prev => [...prev, { 
+      questionIndex, 
+      selectedOption, 
+      isCorrect,
+      questionId: questionId || `q_${questionIndex}`,
+      correctAnswer: correctAnswer ?? -1
+    }]);
   }, []);
 
   const handleStartTest = () => {
+    console.log(`📝 Starting ${mode} with ${questions.length} questions (limit: ${questionLimit})`);
     setPhase('test');
   };
 
   const handleTestComplete = async () => {
-    await savePerformance();
+    // Calculate wrong answers for mistake notebook
+    const wrongAnswers = answeredQuestions.filter(q => !q.isCorrect);
+    console.log(`📊 Test complete. Score: ${score}/${totalAnswered}. Wrong: ${wrongAnswers.length}`);
+    
+    // Save performance (including mistakes)
+    await savePerformance(answeredQuestions, mode);
     setPhase('completion');
   };
 
@@ -68,6 +153,8 @@ const MCQs = () => {
   const handleRestartTest = () => {
     resetQuiz();
     setAnsweredQuestions([]);
+    setTabSwitchCount(0);
+    setForceSubmit(false);
     setPhase('landing');
   };
 
@@ -80,7 +167,7 @@ const MCQs = () => {
             <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
             <Loader2 className="absolute inset-0 m-auto w-8 h-8 text-primary animate-pulse" />
           </div>
-          <p className="text-muted-foreground font-medium">Preparing your test...</p>
+          <p className="text-muted-foreground font-medium">Preparing your {mode}...</p>
           <p className="text-sm text-muted-foreground/60 mt-2">Loading questions</p>
         </div>
       </div>
@@ -94,7 +181,7 @@ const MCQs = () => {
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-destructive/10 flex items-center justify-center">
             <span className="text-3xl">⚠️</span>
           </div>
-          <p className="text-foreground font-display font-semibold text-lg mb-2">Unable to Load Test</p>
+          <p className="text-foreground font-display font-semibold text-lg mb-2">Unable to Load {mode === 'test' ? 'Test' : 'Practice'}</p>
           <p className="text-muted-foreground mb-6">{error}</p>
           <button onClick={handleBackToDashboard} className="btn-primary">
             Return to Dashboard
@@ -113,6 +200,7 @@ const MCQs = () => {
           totalQuestions={questions.length}
           totalTime={questions.length * (meta?.timePerQuestion || 50)}
           xpReward={questions.length * 10}
+          mode={mode}
           onStart={handleStartTest}
           onChangeChapter={handleBackToDashboard}
         />
@@ -121,6 +209,9 @@ const MCQs = () => {
       {phase === 'test' && (
         <MCQTest
           mcqEngine={mcqEngine}
+          mode={mode}
+          tabSwitchCount={tabSwitchCount}
+          forceSubmit={forceSubmit}
           onComplete={handleTestComplete}
           onQuestionAnswered={handleQuestionAnswered}
           onExit={handleBackToDashboard}
@@ -133,6 +224,7 @@ const MCQs = () => {
           totalQuestions={questions.length}
           totalAnswered={totalAnswered}
           xpEarned={score * 10}
+          mode={mode}
           onReviewAnswers={handleReviewAnswers}
           onBackToDashboard={handleBackToDashboard}
           onRestartTest={handleRestartTest}
@@ -146,6 +238,13 @@ const MCQs = () => {
           onBackToResults={() => setPhase('completion')}
           onBackToDashboard={handleBackToDashboard}
         />
+      )}
+
+      {/* Tab Switch Warning */}
+      {tabSwitchCount > 0 && tabSwitchCount < 3 && phase === 'test' && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-warning/90 text-warning-foreground text-sm font-medium animate-fade-in">
+          ⚠️ Tab switch detected ({tabSwitchCount}/3). Test will auto-submit after 3 switches.
+        </div>
       )}
 
       {/* Ambient Background Effects */}

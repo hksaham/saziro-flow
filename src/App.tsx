@@ -12,6 +12,7 @@ import Signup from "./pages/Signup";
 import Pending from "./pages/Pending";
 import Dashboard from "./pages/Dashboard";
 import MCQs from "./pages/MCQs";
+import MCQSelection from "./pages/MCQSelection";
 import MistakeNotebook from "./pages/MistakeNotebook";
 import NotFound from "./pages/NotFound";
 
@@ -42,7 +43,7 @@ const App = () => (
                 path="/mcqs"
                 element={
                   <ProtectedRoute>
-                    <MCQs />
+                    <MCQSelection />
                   </ProtectedRoute>
                 }
               />

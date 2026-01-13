@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Pending from "./pages/Pending";
+import StudentOnboarding from "./pages/StudentOnboarding";
 import Dashboard from "./pages/Dashboard";
 import MCQs from "./pages/MCQs";
 import MCQSelection from "./pages/MCQSelection";
@@ -32,6 +33,7 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/pending" element={<Pending />} />
+              <Route path="/onboarding" element={<StudentOnboarding />} />
               <Route
                 path="/dashboard"
                 element={

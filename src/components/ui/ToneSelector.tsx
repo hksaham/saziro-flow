@@ -2,7 +2,7 @@ import { useTone, ToneType } from '@/contexts/ToneContext';
 import { Globe } from 'lucide-react';
 
 const toneLabels: Record<ToneType, string> = {
-  'chill-bro-banglish': '😎 Chill Bro',
+  'chill-bro': '😎 Chill Bro',
   'friendly-banglish': '🙂 Friendly',
   'formal-bangla': '📚 Formal বাংলা',
 };
@@ -10,7 +10,7 @@ const toneLabels: Record<ToneType, string> = {
 const ToneSelector = () => {
   const { tone, setTone } = useTone();
 
-  const tones: ToneType[] = ['chill-bro-banglish', 'friendly-banglish', 'formal-bangla'];
+  const tones: ToneType[] = ['chill-bro', 'friendly-banglish', 'formal-bangla'];
 
   return (
     <div className="flex items-center gap-2">

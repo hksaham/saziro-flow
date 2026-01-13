@@ -34,7 +34,10 @@ const Signup = () => {
 
   if (user) {
     if (isPending) return <Navigate to="/pending" replace />;
+    // After signup, students go to onboarding
     if (isApproved) return <Navigate to="/dashboard" replace />;
+    // For students who just signed up, redirect to onboarding
+    return <Navigate to="/onboarding" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

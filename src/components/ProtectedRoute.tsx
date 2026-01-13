@@ -6,15 +6,17 @@ import { Loader2 } from 'lucide-react';
 interface ProtectedRouteProps {
   children: ReactNode;
   requireApproved?: boolean;
+  requireOnboarded?: boolean;
   allowedRoles?: ('teacher' | 'student')[];
 }
 
 const ProtectedRoute = ({
   children,
   requireApproved = true,
+  requireOnboarded = true,
   allowedRoles,
 }: ProtectedRouteProps) => {
-  const { user, profile, loading, isPending, isApproved } = useAuth();
+  const { user, profile, loading, isPending, isOnboarded, isStudent } = useAuth();
 
   if (loading) {
     return (
@@ -45,6 +47,11 @@ const ProtectedRoute = ({
         </div>
       </div>
     );
+  }
+
+  // Student needs onboarding - redirect to onboarding
+  if (requireOnboarded && isStudent && !isOnboarded) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   // Pending student - redirect to pending page

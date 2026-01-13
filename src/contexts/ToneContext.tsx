@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
-export type ToneType = 'chill-bro-banglish' | 'friendly-banglish' | 'formal-bangla';
+export type ToneType = 'chill-bro' | 'friendly-banglish' | 'formal-bangla';
 
 interface ToneTexts {
   welcome: string;
@@ -55,7 +56,7 @@ interface ToneTexts {
 }
 
 const toneTexts: Record<ToneType, ToneTexts> = {
-  'chill-bro-banglish': {
+  'chill-bro': {
     welcome: 'Yo! Study Buddy te Welcome! 🔥',
     pendingApproval: 'Bro, Wait Koro! ⏳',
     pendingDescription: 'Tomar teacher tomar request ta dekhe approve korbe. Chill koro, notification ashbe! 😎',
@@ -219,7 +220,38 @@ interface ToneContextType {
 const ToneContext = createContext<ToneContextType | undefined>(undefined);
 
 export const ToneProvider = ({ children }: { children: ReactNode }) => {
-  const [tone, setTone] = useState<ToneType>('chill-bro-banglish');
+  const [tone, setToneState] = useState<ToneType>('chill-bro');
+
+  // Sync tone from profile on mount
+  useEffect(() => {
+    const fetchProfileTone = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('tone')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (profile?.tone && ['chill-bro', 'friendly-banglish', 'formal-bangla'].includes(profile.tone)) {
+          setToneState(profile.tone as ToneType);
+        }
+      }
+    };
+    fetchProfileTone();
+  }, []);
+
+  const setTone = async (newTone: ToneType) => {
+    setToneState(newTone);
+    // Persist to database
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('profiles')
+        .update({ tone: newTone })
+        .eq('user_id', user.id);
+    }
+  };
 
   return (
     <ToneContext.Provider value={{ tone, setTone, t: toneTexts[tone] }}>

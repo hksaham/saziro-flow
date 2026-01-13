@@ -272,32 +272,41 @@ export type Database = {
       }
       profiles: {
         Row: {
+          board: string | null
           coaching_id: string | null
           created_at: string
           full_name: string
           id: string
           role: Database["public"]["Enums"]["user_role"]
+          student_class: string | null
           student_status: Database["public"]["Enums"]["student_status"] | null
+          tone: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          board?: string | null
           coaching_id?: string | null
           created_at?: string
           full_name: string
           id?: string
           role: Database["public"]["Enums"]["user_role"]
+          student_class?: string | null
           student_status?: Database["public"]["Enums"]["student_status"] | null
+          tone?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          board?: string | null
           coaching_id?: string | null
           created_at?: string
           full_name?: string
           id?: string
           role?: Database["public"]["Enums"]["user_role"]
+          student_class?: string | null
           student_status?: Database["public"]["Enums"]["student_status"] | null
+          tone?: string | null
           updated_at?: string
           user_id?: string
         }

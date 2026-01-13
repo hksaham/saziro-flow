@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Logo from '@/components/ui/Logo';
 import { 
   ArrowRight,
@@ -6,7 +6,8 @@ import {
   XCircle,
   Clock,
   X,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from 'lucide-react';
 
 interface MCQTestProps {
@@ -23,17 +24,37 @@ interface MCQTestProps {
     selectOption: (index: number) => void;
     submitAnswer: () => boolean | undefined;
     nextQuestion: () => void;
+    forceSubmitUnanswered: () => void;
   };
+  mode: 'test' | 'practice';
+  tabSwitchCount: number;
+  forceSubmit: boolean;
   onComplete: () => void;
-  onQuestionAnswered: (questionIndex: number, selectedOption: number, isCorrect: boolean) => void;
+  onQuestionAnswered: (
+    questionIndex: number, 
+    selectedOption: number, 
+    isCorrect: boolean,
+    questionId?: string,
+    correctAnswer?: number
+  ) => void;
   onExit: () => void;
 }
 
-const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestProps) => {
+const MCQTest = ({ 
+  mcqEngine, 
+  mode,
+  tabSwitchCount,
+  forceSubmit,
+  onComplete, 
+  onQuestionAnswered, 
+  onExit 
+}: MCQTestProps) => {
   const [timer, setTimer] = useState(50);
   const [isTimerWarning, setIsTimerWarning] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+  const hasAutoSubmitted = useRef(false);
 
   const {
     questions,
@@ -47,19 +68,52 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
     progress,
     selectOption,
     submitAnswer,
-    nextQuestion
+    nextQuestion,
+    forceSubmitUnanswered
   } = mcqEngine;
 
-  // Timer logic
+  // ANTI-CHEAT: Force submit when tab switches hit limit
   useEffect(() => {
-    if (answered) return;
+    if (forceSubmit && !hasAutoSubmitted.current) {
+      console.log('🚨 ANTI-CHEAT: Force submitting test due to tab switches');
+      hasAutoSubmitted.current = true;
+      forceSubmitUnanswered();
+      onComplete();
+    }
+  }, [forceSubmit, forceSubmitUnanswered, onComplete]);
+
+  // Timer logic - FIXED: Auto-submit even without selection
+  useEffect(() => {
+    if (answered || timedOut) return;
     
     const interval = setInterval(() => {
       setTimer(prev => {
         if (prev <= 1) {
-          // Auto-submit when time runs out
+          console.log(`⏱️ TIME UP for question ${currentIndex + 1}. Selected: ${selectedOption}`);
+          setTimedOut(true);
+          
+          // FIXED: Auto-submit regardless of selection
           if (selectedOption !== null) {
+            // Has selection - submit it
             handleSubmit();
+          } else {
+            // No selection - mark as wrong and move on
+            console.log('❌ No answer selected - marking as WRONG');
+            onQuestionAnswered(
+              currentIndex, 
+              -1, // -1 = no answer
+              false, 
+              currentQuestion?.id,
+              currentQuestion?.correctIndex
+            );
+            // Auto-advance after brief delay
+            setTimeout(() => {
+              if (isLastQuestion) {
+                onComplete();
+              } else {
+                handleAutoNext();
+              }
+            }, 1500);
           }
           return 0;
         }
@@ -71,19 +125,26 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [answered, selectedOption]);
+  }, [answered, selectedOption, currentIndex, isLastQuestion, timedOut]);
 
   // Reset timer on new question
   useEffect(() => {
     setTimer(50);
     setIsTimerWarning(false);
+    setTimedOut(false);
   }, [currentIndex]);
 
   const handleSubmit = useCallback(() => {
     if (selectedOption === null) return;
     const isCorrect = submitAnswer();
-    onQuestionAnswered(currentIndex, selectedOption, isCorrect ?? false);
-  }, [selectedOption, submitAnswer, currentIndex, onQuestionAnswered]);
+    onQuestionAnswered(
+      currentIndex, 
+      selectedOption, 
+      isCorrect ?? false,
+      currentQuestion?.id,
+      currentQuestion?.correctIndex
+    );
+  }, [selectedOption, submitAnswer, currentIndex, onQuestionAnswered, currentQuestion]);
 
   const handleNext = useCallback(() => {
     if (isLastQuestion) {
@@ -97,15 +158,23 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
     }
   }, [isLastQuestion, nextQuestion, onComplete]);
 
+  const handleAutoNext = useCallback(() => {
+    setIsTransitioning(true);
+    setTimeout(() => {
+      nextQuestion();
+      setIsTransitioning(false);
+    }, 300);
+  }, [nextQuestion]);
+
   const handleOptionSelect = (index: number) => {
-    if (answered) return;
+    if (answered || timedOut) return;
     selectOption(index);
   };
 
   if (!currentQuestion) return null;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col pb-safe">
       {/* Header */}
       <header className="border-b border-border/50 bg-card/30 backdrop-blur-xl sticky top-0 z-50">
         <div className="container flex justify-between items-center h-16 px-4 sm:px-6">
@@ -116,6 +185,11 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
               <span className="mx-1">/</span>
               <span>{questions.length}</span>
             </span>
+            {mode === 'practice' && (
+              <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                Practice
+              </span>
+            )}
           </div>
 
           <Logo size="sm" />
@@ -134,6 +208,16 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
         </div>
       </header>
 
+      {/* Tab Switch Warning Banner */}
+      {tabSwitchCount > 0 && (
+        <div className="bg-warning/20 border-b border-warning/30 px-4 py-2">
+          <div className="container flex items-center gap-2 text-warning text-sm">
+            <AlertTriangle className="w-4 h-4" />
+            <span>Tab switch warning: {tabSwitchCount}/3. Test auto-submits at 3.</span>
+          </div>
+        </div>
+      )}
+
       {/* Progress Bar */}
       <div className="h-1 bg-muted/50">
         <div 
@@ -143,7 +227,7 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 container px-4 py-6 max-w-2xl mx-auto">
+      <main className="flex-1 container px-4 py-6 max-w-2xl mx-auto pb-32">
         <div className={`transition-all duration-300 ${isTransitioning ? 'opacity-0 translate-x-8' : 'opacity-100 translate-x-0'}`}>
           {/* Difficulty Badge */}
           <div className="flex items-center justify-between mb-4">
@@ -159,6 +243,14 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
               Score: <span className="text-primary font-bold">{score}</span>
             </span>
           </div>
+
+          {/* Timed Out Message */}
+          {timedOut && selectedOption === null && (
+            <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-center gap-2 animate-fade-in">
+              <XCircle className="w-5 h-5 text-destructive" />
+              <span className="text-destructive font-medium">Time's up! No answer selected.</span>
+            </div>
+          )}
 
           {/* Question Card */}
           <div 
@@ -181,13 +273,13 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
             {currentQuestion.options.map((option: string, index: number) => {
               const isSelected = selectedOption === index;
               const isCorrect = index === currentQuestion.correctIndex;
-              const showResult = answered;
+              const showResult = answered || timedOut;
 
               return (
                 <button
                   key={index}
                   onClick={() => handleOptionSelect(index)}
-                  disabled={answered}
+                  disabled={answered || timedOut}
                   className={`
                     w-full p-4 sm:p-5 rounded-xl border-2 text-left transition-all duration-300
                     flex items-center gap-4 group relative overflow-hidden
@@ -207,7 +299,7 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
                   }}
                 >
                   {/* Hover Glow */}
-                  {!answered && !isSelected && (
+                  {!answered && !timedOut && !isSelected && (
                     <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity" />
                   )}
 
@@ -250,7 +342,7 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
           </div>
 
           {/* Explanation */}
-          {answered && (
+          {(answered || timedOut) && (
             <div className="p-5 rounded-xl bg-primary/5 border border-primary/20 mb-6 animate-fade-in">
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
@@ -261,9 +353,13 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
               </div>
             </div>
           )}
+        </div>
+      </main>
 
-          {/* Action Button */}
-          {!answered ? (
+      {/* FIXED: Action Button - Fixed at bottom for mobile visibility */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-lg border-t border-border/50 z-40">
+        <div className="container max-w-2xl mx-auto">
+          {!answered && !timedOut ? (
             <button
               onClick={handleSubmit}
               disabled={selectedOption === null}
@@ -287,7 +383,7 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
             </button>
           )}
         </div>
-      </main>
+      </div>
 
       {/* Exit Button */}
       <button
@@ -301,14 +397,14 @@ const MCQTest = ({ mcqEngine, onComplete, onQuestionAnswered, onExit }: MCQTestP
       {showExitConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
           <div className="w-full max-w-sm p-6 rounded-2xl bg-card border border-border shadow-2xl animate-scale-in">
-            <h3 className="text-lg font-display font-bold text-foreground mb-2">Exit Test?</h3>
+            <h3 className="text-lg font-display font-bold text-foreground mb-2">Exit {mode === 'test' ? 'Test' : 'Practice'}?</h3>
             <p className="text-muted-foreground mb-6">Your progress will be lost. Are you sure?</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowExitConfirm(false)}
                 className="flex-1 py-3 px-4 rounded-xl font-medium border border-border text-foreground hover:bg-secondary transition-colors"
               >
-                Continue Test
+                Continue
               </button>
               <button
                 onClick={onExit}

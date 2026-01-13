@@ -288,10 +288,10 @@ const Dashboard = () => {
               {/* Section 2: Primary Actions */}
               <section className="animate-fade-in delay-100">
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <ActionButton variant="primary">
+                  <ActionButton variant="primary" onClick={() => navigate('/mcqs/test')}>
                     {t.startDailyTest}
                   </ActionButton>
-                  <ActionButton variant="outline">
+                  <ActionButton variant="outline" onClick={() => navigate('/mcqs/practice')}>
                     {t.startPractice}
                   </ActionButton>
                 </div>

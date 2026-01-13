@@ -17,6 +17,7 @@ interface MCQLandingProps {
   totalQuestions: number;
   totalTime: number;
   xpReward: number;
+  mode?: 'test' | 'practice';
   onStart: () => void;
   onChangeChapter: () => void;
 }
@@ -27,6 +28,7 @@ const MCQLanding = ({
   totalQuestions,
   totalTime,
   xpReward,
+  mode = 'test',
   onStart,
   onChangeChapter
 }: MCQLandingProps) => {
@@ -110,9 +112,11 @@ const MCQLanding = ({
               <div className="flex items-start gap-3 p-4 rounded-xl bg-warning/5 border border-warning/20 mb-8">
                 <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-warning">Test Rules</p>
+                  <p className="text-sm font-medium text-warning">{mode === 'test' ? 'Test Rules' : 'Practice Mode'}</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Once started, the test cannot be paused. Each question has 50 seconds.
+                    {mode === 'test' 
+                      ? 'Once started, the test cannot be paused. Each question has 50 seconds.'
+                      : 'Practice at your own pace. No time pressure!'}
                   </p>
                 </div>
               </div>
@@ -131,7 +135,7 @@ const MCQLanding = ({
                   <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                   <span className="relative flex items-center justify-center gap-2">
                     <Zap className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    Start Test
+                    Start {mode === 'test' ? 'Test' : 'Practice'}
                     <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </span>
                 </button>

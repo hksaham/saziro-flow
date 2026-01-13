@@ -8,6 +8,7 @@ import { db } from '@/lib/firebase';
 import { supabase } from '@/integrations/supabase/client';
 import { seedMCQsToFirestore } from '@/lib/mcqSeeder';
 import type { MCQQuestion, MCQState, MCQSet } from '@/types/mcq';
+import { useLeaderboard } from '@/hooks/useLeaderboard';
 
 interface AnsweredQuestion {
   questionIndex: number;
@@ -35,6 +36,9 @@ export const useMCQEngine = (
   });
   const [meta, setMeta] = useState<MCQSet['meta'] | null>(null);
   const [setId, setSetId] = useState<string | null>(null);
+  
+  // Use leaderboard hook for updating rankings after TEST submission
+  const { updateLeaderboardForTest } = useLeaderboard();
 
   // Fetch MCQs from mcq_sets collection (new structure)
   const fetchMCQsFromSets = useCallback(async () => {
@@ -301,6 +305,14 @@ export const useMCQEngine = (
         }
       }
 
+      // ✅ UPDATE LEADERBOARD FOR TEST MODE ONLY
+      if (mode === 'test') {
+        console.log('📊 Updating leaderboard for TEST submission...');
+        await updateLeaderboardForTest(correctCount, wrongCount, totalQuestions);
+      } else {
+        console.log('⏭️ Skipping leaderboard update for PRACTICE mode');
+      }
+
       return { success: true, xpEarned };
     } catch (err: any) {
       console.error('❌ Error saving performance:', {
@@ -309,7 +321,7 @@ export const useMCQEngine = (
       });
       return { success: false, xpEarned: 0 };
     }
-  }, [state.questions, meta]);
+  }, [state.questions, meta, updateLeaderboardForTest]);
 
   // Fetch MCQs on mount
   useEffect(() => {

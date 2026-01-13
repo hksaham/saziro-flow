@@ -325,6 +325,7 @@ const Dashboard = () => {
                     type="leaderboard"
                     label={t.leaderboard}
                     isActive={true}
+                    onClick={() => navigate('/leaderboard')}
                   />
                   <FeatureCard
                     type="profile"

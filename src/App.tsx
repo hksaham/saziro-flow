@@ -16,6 +16,7 @@ import MCQs from "./pages/MCQs";
 import MCQSelection from "./pages/MCQSelection";
 import MistakeNotebook from "./pages/MistakeNotebook";
 import Profile from "./pages/Profile";
+import Leaderboard from "./pages/Leaderboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -79,6 +80,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <Profile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/leaderboard"
+                element={
+                  <ProtectedRoute>
+                    <Leaderboard />
                   </ProtectedRoute>
                 }
               />

@@ -334,6 +334,34 @@ const Dashboard = () => {
                 </div>
               </section>
 
+              {/* Section 4: Performance Dashboard - SEPARATED test vs practice */}
+              <section className="animate-fade-in delay-300">
+                <h2 className="text-xl font-display font-bold text-foreground mb-4">
+                  {t.performanceTitle}
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <PerformanceCard
+                    type="mcqs-today"
+                    label="Test MCQs"
+                    value={testMcqsToday}
+                  />
+                  <PerformanceCard
+                    type="mcqs-today"
+                    label="Practice MCQs"
+                    value={practiceMcqsToday}
+                  />
+                  <PerformanceCard
+                    type="rank"
+                    label="Test Accuracy"
+                    value={`${todayTestPerformance.accuracy}%`}
+                  />
+                  <PerformanceCard
+                    type="rank"
+                    label={t.yourRank}
+                    value="—"
+                  />
+                </div>
+              </section>
 
               {/* Notification Toggle Button - Fixed at bottom right */}
               <button

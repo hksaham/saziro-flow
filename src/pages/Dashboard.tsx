@@ -30,7 +30,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { profile, signOut, coachingId, isTeacher } = useAuth();
   const { t } = useTone();
-  const { stats, todayPerformance, loading: statsLoading } = useUserStats();
+  const { stats, todayTestPerformance, todayPracticePerformance, loading: statsLoading } = useUserStats();
   const [coaching, setCoaching] = useState<Coaching | null>(null);
   const [pendingStudents, setPendingStudents] = useState<PendingStudent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,10 +38,11 @@ const Dashboard = () => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Use stats from hook
+  // Use stats from hook - TEST ONLY for XP and streak
   const xp = stats?.total_xp ?? 0;
   const streak = stats?.current_streak ?? 0;
-  const mcqsToday = todayPerformance.totalQuestions;
+  const testMcqsToday = todayTestPerformance.total;
+  const practiceMcqsToday = todayPracticePerformance.total;
 
   useEffect(() => {
     if (isTeacher && coachingId) {
@@ -333,16 +334,26 @@ const Dashboard = () => {
                 </div>
               </section>
 
-              {/* Section 4: Performance Dashboard */}
+              {/* Section 4: Performance Dashboard - SEPARATED test vs practice */}
               <section className="animate-fade-in delay-300">
                 <h2 className="text-xl font-display font-bold text-foreground mb-4">
                   {t.performanceTitle}
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <PerformanceCard
                     type="mcqs-today"
-                    label={t.mcqsSmashedToday}
-                    value={mcqsToday}
+                    label="Test MCQs"
+                    value={testMcqsToday}
+                  />
+                  <PerformanceCard
+                    type="mcqs-today"
+                    label="Practice MCQs"
+                    value={practiceMcqsToday}
+                  />
+                  <PerformanceCard
+                    type="rank"
+                    label="Test Accuracy"
+                    value={`${todayTestPerformance.accuracy}%`}
                   />
                   <PerformanceCard
                     type="rank"

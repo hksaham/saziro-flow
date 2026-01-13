@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMCQEngine } from '@/hooks/useMCQEngine';
+import { useDailyTest } from '@/hooks/useDailyTest';
 import { useUserStats } from '@/hooks/useUserStats';
+import { supabase } from '@/integrations/supabase/client';
 import MCQLanding from '@/components/mcq/MCQLanding';
 import MCQTest from '@/components/mcq/MCQTest';
 import MCQCompletion from '@/components/mcq/MCQCompletion';
 import MCQReview from '@/components/mcq/MCQReview';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import type { MCQQuestion } from '@/types/mcq';
 
 type MCQPhase = 'landing' | 'test' | 'completion' | 'review';
 
@@ -15,9 +17,13 @@ interface MCQsProps {
   mode?: 'test' | 'practice';
 }
 
-// FIXED QUESTION LIMITS
-const TEST_QUESTION_LIMIT = 30;
-const PRACTICE_QUESTION_LIMIT = 10;
+interface AnsweredQuestion {
+  questionIndex: number;
+  selectedOption: number;
+  isCorrect: boolean;
+  questionId: string;
+  correctAnswer: number;
+}
 
 const MCQs = ({ mode = 'test' }: MCQsProps) => {
   const navigate = useNavigate();
@@ -25,48 +31,98 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
   const [phase, setPhase] = useState<MCQPhase>('landing');
   const [xpEarned, setXpEarned] = useState(0);
   const [testStartTime, setTestStartTime] = useState<number>(0);
-  const [answeredQuestions, setAnsweredQuestions] = useState<{
-    questionIndex: number;
-    selectedOption: number;
-    isCorrect: boolean;
-    questionId: string;
-    correctAnswer: number;
-  }[]>([]);
+  const [answeredQuestions, setAnsweredQuestions] = useState<AnsweredQuestion[]>([]);
+  const [questions, setQuestions] = useState<MCQQuestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dailyTestId, setDailyTestId] = useState<string | null>(null);
+  const [practiceSetNumber, setPracticeSetNumber] = useState<number>(0);
 
-  // User stats hook for XP and streak updates
+  // Quiz state
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [answered, setAnswered] = useState(false);
+  const [score, setScore] = useState(0);
+  const [totalAnswered, setTotalAnswered] = useState(0);
+
+  // Hooks
   const { updateStats } = useUserStats();
+  const { 
+    status: dailyStatus, 
+    getOrCreateDailyTest, 
+    getPracticeQuestions,
+    recordTestAttempt,
+    recordPracticeAttempt,
+    TEST_QUESTION_LIMIT,
+    PRACTICE_QUESTION_LIMIT,
+    MAX_PRACTICE_SETS_PER_DAY
+  } = useDailyTest();
 
-  // Anti-cheat: Track tab visibility
+  // Anti-cheat state
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [forceSubmit, setForceSubmit] = useState(false);
 
-  // Get question limit based on mode
-  const questionLimit = mode === 'test' ? TEST_QUESTION_LIMIT : PRACTICE_QUESTION_LIMIT;
-
+  // Load questions based on mode
   useEffect(() => {
-    console.log('🧾 APP AUTH DEBUG (MCQs route):', {
-      user: user ? { id: user.id, email: user.email } : null,
-      uid: user?.id ?? null,
-      role: profile?.role ?? null,
-      coachingId: coachingId ?? null,
-      mode,
-      questionLimit,
-    });
-  }, [user, profile?.role, coachingId, mode, questionLimit]);
-  
-  const mcqEngine = useMCQEngine('class_10', 'Science', 'chapter_1', questionLimit);
-  
-  const {
-    questions,
-    loading,
-    error,
-    score,
-    totalAnswered,
-    meta,
-    setId,
-    savePerformance,
-    resetQuiz
-  } = mcqEngine;
+    const loadQuestions = async () => {
+      if (!user || !coachingId) {
+        setLoading(false);
+        setError('Not authenticated');
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      if (mode === 'test') {
+        // Check if test already taken today
+        if (!dailyStatus.canTakeTest) {
+          setError('You have already completed today\'s test. Come back tomorrow!');
+          setLoading(false);
+          return;
+        }
+
+        // Get or create daily test
+        const result = await getOrCreateDailyTest();
+        if (result.error) {
+          setError(result.error);
+          setLoading(false);
+          return;
+        }
+
+        setQuestions(result.questions);
+        setDailyTestId(result.dailyTestId);
+        console.log(`📋 Loaded ${result.questions.length} test questions`);
+      } else {
+        // Practice mode
+        if (!dailyStatus.canTakePractice) {
+          setError(`Daily practice limit reached (${MAX_PRACTICE_SETS_PER_DAY}/day). Come back tomorrow!`);
+          setLoading(false);
+          return;
+        }
+
+        const result = await getPracticeQuestions();
+        if (result.error) {
+          setError(result.error);
+          setLoading(false);
+          return;
+        }
+
+        setQuestions(result.questions);
+        setPracticeSetNumber(result.setNumber);
+        console.log(`📋 Loaded ${result.questions.length} practice questions (set #${result.setNumber})`);
+      }
+
+      setLoading(false);
+    };
+
+    // Wait for daily status to load first
+    if (!dailyStatus.canTakeTest && mode === 'test' && !loading) {
+      // Status loaded and can't take test
+    } else {
+      loadQuestions();
+    }
+  }, [user, coachingId, mode, dailyStatus.canTakeTest, dailyStatus.canTakePractice]);
 
   // ANTI-CHEAT: Tab visibility detection
   useEffect(() => {
@@ -94,8 +150,7 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
       }
     };
 
-    // Prevent back navigation during test
-    const handlePopState = (e: PopStateEvent) => {
+    const handlePopState = () => {
       if (phase === 'test') {
         window.history.pushState(null, '', window.location.href);
         console.log('⚠️ ANTI-CHEAT: Back navigation blocked');
@@ -105,8 +160,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('popstate', handlePopState);
-    
-    // Push initial state for popstate prevention
     window.history.pushState(null, '', window.location.href);
 
     return () => {
@@ -116,17 +169,71 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     };
   }, [phase]);
 
+  // Quiz control functions
+  const selectOption = useCallback((optionIndex: number) => {
+    if (answered) return;
+    setSelectedOption(optionIndex);
+  }, [answered]);
+
+  const submitAnswer = useCallback(() => {
+    if (selectedOption === null || answered) return false;
+    
+    const currentQuestion = questions[currentIndex];
+    const isCorrect = selectedOption === currentQuestion.correctIndex;
+    
+    setAnswered(true);
+    if (isCorrect) setScore(prev => prev + 1);
+    setTotalAnswered(prev => prev + 1);
+    
+    return isCorrect;
+  }, [selectedOption, answered, questions, currentIndex]);
+
+  const nextQuestion = useCallback(() => {
+    if (currentIndex < questions.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+      setSelectedOption(null);
+      setAnswered(false);
+    }
+  }, [currentIndex, questions.length]);
+
+  const prevQuestion = useCallback(() => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+      setSelectedOption(null);
+      setAnswered(false);
+    }
+  }, [currentIndex]);
+
+  const forceSubmitUnanswered = useCallback(() => {
+    console.log('🚨 FORCE SUBMIT: Marking all remaining questions as wrong');
+    setTotalAnswered(questions.length);
+    setAnswered(true);
+  }, [questions.length]);
+
+  const resetQuiz = useCallback(() => {
+    setCurrentIndex(0);
+    setSelectedOption(null);
+    setAnswered(false);
+    setScore(0);
+    setTotalAnswered(0);
+    setAnsweredQuestions([]);
+    setTabSwitchCount(0);
+    setForceSubmit(false);
+    setXpEarned(0);
+    setTestStartTime(0);
+  }, []);
+
   // Track answered questions for review
   const handleQuestionAnswered = useCallback((
     questionIndex: number, 
-    selectedOption: number, 
+    selectedOptionIdx: number, 
     isCorrect: boolean,
     questionId?: string,
     correctAnswer?: number
   ) => {
     setAnsweredQuestions(prev => [...prev, { 
       questionIndex, 
-      selectedOption, 
+      selectedOption: selectedOptionIdx, 
       isCorrect,
       questionId: questionId || `q_${questionIndex}`,
       correctAnswer: correctAnswer ?? -1
@@ -134,52 +241,124 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
   }, []);
 
   const handleStartTest = () => {
-    console.log(`📝 Starting ${mode} with ${questions.length} questions (limit: ${questionLimit})`);
+    console.log(`📝 Starting ${mode} with ${questions.length} questions`);
     setTestStartTime(Date.now());
     setPhase('test');
   };
 
   const handleTestComplete = async () => {
-    // Calculate time taken
     const timeTakenSeconds = Math.floor((Date.now() - testStartTime) / 1000);
-    
-    // Calculate wrong answers for mistake notebook
     const wrongAnswers = answeredQuestions.filter(q => !q.isCorrect);
-    console.log(`📊 Test complete. Score: ${score}/${totalAnswered}. Wrong: ${wrongAnswers.length}. Time: ${timeTakenSeconds}s`);
     
-    // Save performance (including mistakes) and get XP earned
-    const result = await savePerformance(answeredQuestions, mode, timeTakenSeconds);
-    
-    if (result.success) {
-      setXpEarned(result.xpEarned);
-      // Update user stats (XP and streak)
-      await updateStats(result.xpEarned);
-    } else {
-      // Fallback XP calculation if save failed
-      setXpEarned(score * 10);
+    console.log(`📊 ${mode} complete. Score: ${score}/${totalAnswered}. Wrong: ${wrongAnswers.length}. Time: ${timeTakenSeconds}s`);
+
+    try {
+      const correctCount = answeredQuestions.filter(q => q.isCorrect).length;
+      const wrongCount = answeredQuestions.filter(q => !q.isCorrect).length;
+      const totalQuestions = answeredQuestions.length;
+      const scorePercentage = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
+      
+      // XP calculation: TEST = +10 correct, -5 wrong | PRACTICE = 0
+      let calculatedXp = 0;
+      if (mode === 'test') {
+        calculatedXp = (correctCount * 10) - (wrongCount * 5);
+        calculatedXp = Math.max(0, calculatedXp); // Never negative
+      }
+
+      // Save performance record
+      const { data: perfData, error: perfError } = await supabase
+        .from('mcq_performance')
+        .insert({
+          user_id: user!.id,
+          coaching_id: coachingId,
+          mode,
+          total_questions: totalQuestions,
+          correct_answers: correctCount,
+          wrong_answers: wrongCount,
+          score_percentage: scorePercentage,
+          time_taken_seconds: timeTakenSeconds,
+          xp_earned: calculatedXp
+        })
+        .select()
+        .single();
+
+      if (perfError) {
+        console.error('Error saving performance:', perfError);
+      } else {
+        // Save wrong answers to mistake notebook with mode
+        if (wrongAnswers.length > 0) {
+          const wrongRecords = wrongAnswers.map(wa => {
+            const question = questions[wa.questionIndex];
+            return {
+              user_id: user!.id,
+              performance_id: perfData.id,
+              question_text: question?.question || `Question ${wa.questionIndex + 1}`,
+              options: question?.options || [],
+              selected_answer: question?.options?.[wa.selectedOption] || String(wa.selectedOption),
+              correct_answer: question?.options?.[wa.correctAnswer] || String(wa.correctAnswer),
+              subject: 'Science',
+              mode: mode // Track test vs practice mistakes separately
+            };
+          });
+
+          await supabase.from('mcq_wrong_answers').insert(wrongRecords);
+        }
+
+        // Record attempt and update stats based on mode
+        if (mode === 'test' && dailyTestId) {
+          await recordTestAttempt(dailyTestId, perfData.id);
+          // Update XP and streak ONLY for test
+          await updateStats(calculatedXp);
+        } else if (mode === 'practice' && practiceSetNumber > 0) {
+          await recordPracticeAttempt(practiceSetNumber, perfData.id);
+          // Practice: NO XP, NO streak update
+        }
+      }
+
+      setXpEarned(calculatedXp);
+    } catch (err) {
+      console.error('Error completing test:', err);
+      setXpEarned(0);
     }
     
     setPhase('completion');
   };
 
-  const handleReviewAnswers = () => {
-    setPhase('review');
-  };
-
-  const handleBackToDashboard = () => {
-    navigate('/dashboard');
-  };
-
+  const handleReviewAnswers = () => setPhase('review');
+  const handleBackToDashboard = () => navigate('/dashboard');
+  
   const handleRestartTest = () => {
     resetQuiz();
-    setAnsweredQuestions([]);
-    setTabSwitchCount(0);
-    setForceSubmit(false);
-    setXpEarned(0);
-    setTestStartTime(0);
     setPhase('landing');
   };
 
+  // Build MCQ engine-like object for MCQTest component
+  const mcqEngine = {
+    questions,
+    currentIndex,
+    selectedOption,
+    answered,
+    score,
+    totalAnswered,
+    loading,
+    error,
+    currentQuestion: questions[currentIndex] || null,
+    isLastQuestion: currentIndex === questions.length - 1,
+    isFirstQuestion: currentIndex === 0,
+    progress: questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0,
+    meta: { subject: 'Science', class: '10', board: 'SSC', timePerQuestion: 50 },
+    setId: null,
+    selectOption,
+    submitAnswer,
+    forceSubmitUnanswered,
+    nextQuestion,
+    prevQuestion,
+    resetQuiz,
+    savePerformance: async () => ({ success: true, xpEarned: 0 }),
+    refetch: () => {}
+  };
+
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background bg-pattern">
@@ -196,14 +375,17 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     );
   }
 
+  // Error state
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background bg-pattern">
         <div className="text-center card-premium p-8 max-w-md mx-4 animate-scale-in">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-destructive/10 flex items-center justify-center">
-            <span className="text-3xl">⚠️</span>
+            <AlertTriangle className="w-8 h-8 text-destructive" />
           </div>
-          <p className="text-foreground font-display font-semibold text-lg mb-2">Unable to Load {mode === 'test' ? 'Test' : 'Practice'}</p>
+          <p className="text-foreground font-display font-semibold text-lg mb-2">
+            {mode === 'test' ? 'Test Unavailable' : 'Practice Unavailable'}
+          </p>
           <p className="text-muted-foreground mb-6">{error}</p>
           <button onClick={handleBackToDashboard} className="btn-primary">
             Return to Dashboard
@@ -213,16 +395,24 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     );
   }
 
+  // Get question limit based on mode
+  const questionLimit = mode === 'test' ? TEST_QUESTION_LIMIT : PRACTICE_QUESTION_LIMIT;
+  const maxXp = mode === 'test' ? questionLimit * 10 : 0;
+
   return (
     <div className="min-h-screen bg-background bg-pattern">
       {phase === 'landing' && (
         <MCQLanding
-          subject={meta?.subject || 'Science'}
-          chapter={`Class ${meta?.class || '10'} - ${meta?.board || 'SSC'} Board`}
+          subject="Science"
+          chapter={`Class 10 - SSC Board`}
           totalQuestions={questions.length}
-          totalTime={questions.length * (meta?.timePerQuestion || 50)}
-          xpReward={questions.length * 10}
+          totalTime={questions.length * 50}
+          xpReward={maxXp}
           mode={mode}
+          practiceSetInfo={mode === 'practice' ? {
+            setNumber: practiceSetNumber,
+            remaining: dailyStatus.remainingPracticeSets
+          } : undefined}
           onStart={handleStartTest}
           onChangeChapter={handleBackToDashboard}
         />
@@ -265,7 +455,7 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
       {/* Tab Switch Warning */}
       {tabSwitchCount > 0 && tabSwitchCount < 3 && phase === 'test' && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-warning/90 text-warning-foreground text-sm font-medium animate-fade-in">
-          ⚠️ Tab switch detected ({tabSwitchCount}/3). Test will auto-submit after 3 switches.
+          ⚠️ Tab switch detected ({tabSwitchCount}/3). {mode === 'test' ? 'Test' : 'Practice'} will auto-submit after 3 switches.
         </div>
       )}
 

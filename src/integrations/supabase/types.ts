@@ -41,6 +41,93 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_test_attempts: {
+        Row: {
+          coaching_id: string
+          completed_at: string
+          daily_test_id: string
+          id: string
+          performance_id: string | null
+          test_date: string
+          user_id: string
+        }
+        Insert: {
+          coaching_id: string
+          completed_at?: string
+          daily_test_id: string
+          id?: string
+          performance_id?: string | null
+          test_date?: string
+          user_id: string
+        }
+        Update: {
+          coaching_id?: string
+          completed_at?: string
+          daily_test_id?: string
+          id?: string
+          performance_id?: string | null
+          test_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_test_attempts_coaching_id_fkey"
+            columns: ["coaching_id"]
+            isOneToOne: false
+            referencedRelation: "coachings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_test_attempts_daily_test_id_fkey"
+            columns: ["daily_test_id"]
+            isOneToOne: false
+            referencedRelation: "daily_tests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_test_attempts_performance_id_fkey"
+            columns: ["performance_id"]
+            isOneToOne: false
+            referencedRelation: "mcq_performance"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_tests: {
+        Row: {
+          coaching_id: string
+          created_at: string
+          id: string
+          mcq_set_id: string
+          question_ids: Json
+          test_date: string
+        }
+        Insert: {
+          coaching_id: string
+          created_at?: string
+          id?: string
+          mcq_set_id: string
+          question_ids: Json
+          test_date?: string
+        }
+        Update: {
+          coaching_id?: string
+          created_at?: string
+          id?: string
+          mcq_set_id?: string
+          question_ids?: Json
+          test_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_tests_coaching_id_fkey"
+            columns: ["coaching_id"]
+            isOneToOne: false
+            referencedRelation: "coachings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mcq_performance: {
         Row: {
           coaching_id: string | null
@@ -96,6 +183,7 @@ export type Database = {
           correct_answer: string
           created_at: string
           id: string
+          mode: string | null
           options: Json
           performance_id: string | null
           question_text: string
@@ -107,6 +195,7 @@ export type Database = {
           correct_answer: string
           created_at?: string
           id?: string
+          mode?: string | null
           options: Json
           performance_id?: string | null
           question_text: string
@@ -118,6 +207,7 @@ export type Database = {
           correct_answer?: string
           created_at?: string
           id?: string
+          mode?: string | null
           options?: Json
           performance_id?: string | null
           question_text?: string
@@ -128,6 +218,51 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "mcq_wrong_answers_performance_id_fkey"
+            columns: ["performance_id"]
+            isOneToOne: false
+            referencedRelation: "mcq_performance"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      practice_attempts: {
+        Row: {
+          attempt_date: string
+          coaching_id: string | null
+          created_at: string
+          id: string
+          performance_id: string | null
+          set_number: number
+          user_id: string
+        }
+        Insert: {
+          attempt_date?: string
+          coaching_id?: string | null
+          created_at?: string
+          id?: string
+          performance_id?: string | null
+          set_number: number
+          user_id: string
+        }
+        Update: {
+          attempt_date?: string
+          coaching_id?: string | null
+          created_at?: string
+          id?: string
+          performance_id?: string | null
+          set_number?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "practice_attempts_coaching_id_fkey"
+            columns: ["coaching_id"]
+            isOneToOne: false
+            referencedRelation: "coachings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "practice_attempts_performance_id_fkey"
             columns: ["performance_id"]
             isOneToOne: false
             referencedRelation: "mcq_performance"

@@ -312,6 +312,7 @@ const Dashboard = () => {
                     type="mistake-notebook"
                     label={t.mistakeNotebook}
                     isActive={true}
+                    onClick={() => navigate('/mistakes')}
                   />
                   <FeatureCard
                     type="suggestions"

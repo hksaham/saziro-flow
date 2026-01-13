@@ -12,6 +12,7 @@ import Signup from "./pages/Signup";
 import Pending from "./pages/Pending";
 import Dashboard from "./pages/Dashboard";
 import MCQs from "./pages/MCQs";
+import MistakeNotebook from "./pages/MistakeNotebook";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -58,6 +59,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <MCQs mode="practice" />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/mistakes"
+                element={
+                  <ProtectedRoute>
+                    <MistakeNotebook />
                   </ProtectedRoute>
                 }
               />

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMCQEngine } from '@/hooks/useMCQEngine';
+import { useUserStats } from '@/hooks/useUserStats';
 import MCQLanding from '@/components/mcq/MCQLanding';
 import MCQTest from '@/components/mcq/MCQTest';
 import MCQCompletion from '@/components/mcq/MCQCompletion';
@@ -22,6 +23,8 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
   const navigate = useNavigate();
   const { user, profile, coachingId } = useAuth();
   const [phase, setPhase] = useState<MCQPhase>('landing');
+  const [xpEarned, setXpEarned] = useState(0);
+  const [testStartTime, setTestStartTime] = useState<number>(0);
   const [answeredQuestions, setAnsweredQuestions] = useState<{
     questionIndex: number;
     selectedOption: number;
@@ -29,6 +32,9 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     questionId: string;
     correctAnswer: number;
   }[]>([]);
+
+  // User stats hook for XP and streak updates
+  const { updateStats } = useUserStats();
 
   // Anti-cheat: Track tab visibility
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
@@ -129,16 +135,30 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
 
   const handleStartTest = () => {
     console.log(`📝 Starting ${mode} with ${questions.length} questions (limit: ${questionLimit})`);
+    setTestStartTime(Date.now());
     setPhase('test');
   };
 
   const handleTestComplete = async () => {
+    // Calculate time taken
+    const timeTakenSeconds = Math.floor((Date.now() - testStartTime) / 1000);
+    
     // Calculate wrong answers for mistake notebook
     const wrongAnswers = answeredQuestions.filter(q => !q.isCorrect);
-    console.log(`📊 Test complete. Score: ${score}/${totalAnswered}. Wrong: ${wrongAnswers.length}`);
+    console.log(`📊 Test complete. Score: ${score}/${totalAnswered}. Wrong: ${wrongAnswers.length}. Time: ${timeTakenSeconds}s`);
     
-    // Save performance (including mistakes)
-    await savePerformance(answeredQuestions, mode);
+    // Save performance (including mistakes) and get XP earned
+    const result = await savePerformance(answeredQuestions, mode, timeTakenSeconds);
+    
+    if (result.success) {
+      setXpEarned(result.xpEarned);
+      // Update user stats (XP and streak)
+      await updateStats(result.xpEarned);
+    } else {
+      // Fallback XP calculation if save failed
+      setXpEarned(score * 10);
+    }
+    
     setPhase('completion');
   };
 
@@ -155,6 +175,8 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     setAnsweredQuestions([]);
     setTabSwitchCount(0);
     setForceSubmit(false);
+    setXpEarned(0);
+    setTestStartTime(0);
     setPhase('landing');
   };
 
@@ -223,7 +245,7 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
           score={score}
           totalQuestions={questions.length}
           totalAnswered={totalAnswered}
-          xpEarned={score * 10}
+          xpEarned={xpEarned}
           mode={mode}
           onReviewAnswers={handleReviewAnswers}
           onBackToDashboard={handleBackToDashboard}

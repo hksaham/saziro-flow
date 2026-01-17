@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDailyTest } from '@/hooks/useDailyTest';
 import { useUserStats } from '@/hooks/useUserStats';
+import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { supabase } from '@/integrations/supabase/client';
 import MCQLanding from '@/components/mcq/MCQLanding';
 import MCQTest from '@/components/mcq/MCQTest';
@@ -47,6 +48,7 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
 
   // Hooks
   const { updateStats } = useUserStats();
+  const { updateLeaderboardForTest } = useLeaderboard();
   const { 
     status: dailyStatus, 
     getOrCreateDailyTest, 
@@ -318,9 +320,22 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
           await recordTestAttempt(dailyTestId, perfData.id);
           // Update XP and streak ONLY for test
           await updateStats(calculatedXp);
+          
+          // ✅ UPDATE FIREBASE LEADERBOARD (TEST ONLY)
+          console.log("📊 Updating Firebase leaderboard after test...");
+          const leaderboardSuccess = await updateLeaderboardForTest(
+            correctCount,
+            wrongCount,
+            totalQuestions
+          );
+          console.log("LEADERBOARD WRITE RESULT", {
+            uid: user?.id,
+            coachingId,
+            success: leaderboardSuccess,
+          });
         } else if (mode === 'practice' && practiceSetNumber > 0) {
           await recordPracticeAttempt(practiceSetNumber, perfData.id);
-          // Practice: NO XP, NO streak update
+          // Practice: NO XP, NO streak update, NO leaderboard update
         }
       }
 

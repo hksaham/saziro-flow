@@ -3,7 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTone } from '@/contexts/ToneContext';
 import { useUserStats } from '@/hooks/useUserStats';
-import { supabase } from '@/integrations/supabase/client';
+import {
+  getCoaching,
+  getPendingStudents,
+  approveStudent,
+  rejectStudent,
+  Coaching,
+  FirebaseUser,
+} from '@/lib/firebaseService';
 import Logo from '@/components/ui/Logo';
 import ToneSelector from '@/components/ui/ToneSelector';
 import { LogOut, Copy, Check, Users, UserCheck, UserX, Loader2 } from 'lucide-react';
@@ -12,31 +19,16 @@ import ActionButton from '@/components/student/ActionButton';
 import FeatureCard from '@/components/student/FeatureCard';
 import PerformanceCard from '@/components/student/PerformanceCard';
 
-
-interface PendingStudent {
-  id: string;
-  user_id: string;
-  full_name: string;
-  created_at: string;
-}
-
-interface Coaching {
-  id: string;
-  name: string;
-  invite_token: string;
-}
-
 const Dashboard = () => {
   const navigate = useNavigate();
   const { profile, signOut, coachingId, isTeacher } = useAuth();
   const { t } = useTone();
   const { stats, todayTestPerformance, todayPracticePerformance, loading: statsLoading } = useUserStats();
   const [coaching, setCoaching] = useState<Coaching | null>(null);
-  const [pendingStudents, setPendingStudents] = useState<PendingStudent[]>([]);
+  const [pendingStudents, setPendingStudents] = useState<FirebaseUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  
 
   // Use stats from hook - TEST ONLY for XP and streak
   const xp = stats?.total_xp ?? 0;
@@ -56,105 +48,76 @@ const Dashboard = () => {
     if (!coachingId) return;
 
     try {
-      // Fetch coaching details
-      const { data: coachingData, error: coachingError } = await supabase
-        .from('coachings')
-        .select('*')
-        .eq('id', coachingId)
-        .single();
+      console.log('🔥 FIREBASE: Fetching coaching data', coachingId);
 
-      if (coachingError) throw coachingError;
+      // Fetch coaching details from Firebase
+      const coachingData = await getCoaching(coachingId);
       setCoaching(coachingData);
 
-      // Fetch pending students
-      const { data: studentsData, error: studentsError } = await supabase
-        .from('profiles')
-        .select('id, user_id, full_name, created_at')
-        .eq('coaching_id', coachingId)
-        .eq('role', 'student')
-        .eq('student_status', 'pending');
+      // Fetch pending students from Firebase
+      const students = await getPendingStudents(coachingId);
+      setPendingStudents(students);
 
-      if (studentsError) throw studentsError;
-      setPendingStudents(studentsData || []);
+      console.log('✅ FIREBASE: Coaching data loaded', {
+        coaching: coachingData?.name,
+        pendingStudents: students.length,
+      });
     } catch (err) {
-      console.error('Error fetching data:', err);
+      console.error('❌ FIREBASE: Error fetching coaching data:', err);
     } finally {
       setLoading(false);
     }
   };
 
   const copyInviteLink = () => {
-    if (coaching?.invite_token) {
-      const inviteUrl = `${window.location.origin}/signup?token=${coaching.invite_token}`;
+    if (coaching?.inviteToken) {
+      const inviteUrl = `${window.location.origin}/signup?token=${coaching.inviteToken}`;
       navigator.clipboard.writeText(inviteUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const handleStudentStatus = async (studentId: string, status: 'approved' | 'rejected') => {
-    setProcessingId(studentId);
+  const handleStudentStatus = async (studentUid: string, status: 'approved' | 'rejected') => {
+    setProcessingId(studentUid);
     try {
-      // First get the student's profile data for leaderboard creation
-      const student = pendingStudents.find(s => s.id === studentId);
-      
-      // Update student status
-      const { error } = await supabase
-        .from('profiles')
-        .update({ student_status: status })
-        .eq('id', studentId);
+      const student = pendingStudents.find((s) => s.uid === studentUid);
 
-      if (error) throw error;
-
-      // If APPROVED, create leaderboard entry immediately (roster entry with XP=0)
       if (status === 'approved' && student && coachingId) {
-        // Get full profile data for class/board info
-        const { data: fullProfile } = await supabase
-          .from('profiles')
-          .select('student_class, board')
-          .eq('id', studentId)
-          .single();
-
-        // Create LIVE leaderboard entry (XP=0, appears immediately)
         console.log("LEADERBOARD WRITE ATTEMPT", {
-          uid: student.user_id,
+          uid: student.uid,
           coachingId,
-          path: `leaderboards/${coachingId}/users/${student.user_id}`,
+          path: `leaderboards/${coachingId}/users/${student.uid}`,
         });
 
-        const { error: leaderboardInsertError } = await supabase
-          .from('live_leaderboard')
-          .insert({
-            coaching_id: coachingId,
-            user_id: student.user_id,
-            full_name: student.full_name,
-            student_class: fullProfile?.student_class || null,
-            board: fullProfile?.board || null,
-            total_xp: 0,
-            correct_answers: 0,
-            wrong_answers: 0,
-            accuracy: 0,
-            tests_taken: 0,
-            last_test_at: null
-          });
+        // Approve student and create leaderboard entry in Firebase
+        await approveStudent(student.uid, coachingId, {
+          name: student.name,
+          class: student.class,
+          board: student.board,
+        });
 
         console.log("LEADERBOARD WRITE RESULT", {
-          uid: student.user_id,
+          uid: student.uid,
           coachingId,
-          error: leaderboardInsertError?.message ?? null,
+          error: null,
         });
 
-        if (leaderboardInsertError) {
-          console.error('❌ Leaderboard insert failed:', leaderboardInsertError);
-        } else {
-          console.log('✅ Created leaderboard entry for approved student:', student.full_name);
-        }
+        console.log('✅ FIREBASE: Approved student and created leaderboard entry:', student.name);
+      } else if (status === 'rejected') {
+        await rejectStudent(studentUid);
+        console.log('✅ FIREBASE: Rejected student:', studentUid);
       }
 
       // Remove from pending list
-      setPendingStudents((prev) => prev.filter((s) => s.id !== studentId));
-    } catch (err) {
-      console.error('Error updating student status:', err);
+      setPendingStudents((prev) => prev.filter((s) => s.uid !== studentUid));
+    } catch (err: any) {
+      console.error("LEADERBOARD WRITE RESULT", {
+        uid: studentUid,
+        coachingId,
+        error: err?.message,
+      });
+      console.error('❌ FIREBASE: Error updating student status:', err);
     } finally {
       setProcessingId(null);
     }
@@ -176,10 +139,7 @@ const Dashboard = () => {
           <Logo size="sm" />
           <div className="flex items-center gap-4">
             <ToneSelector />
-            <button
-              onClick={signOut}
-              className="btn-ghost flex items-center gap-2"
-            >
+            <button onClick={signOut} className="btn-ghost flex items-center gap-2">
               <LogOut className="w-4 h-4" />
               {t.logout}
             </button>
@@ -215,10 +175,7 @@ const Dashboard = () => {
                       Share this link with students to invite them to your coaching
                     </p>
                   </div>
-                  <button
-                    onClick={copyInviteLink}
-                    className="btn-primary flex items-center gap-2"
-                  >
+                  <button onClick={copyInviteLink} className="btn-primary flex items-center gap-2">
                     {copied ? (
                       <>
                         <Check className="w-4 h-4" />
@@ -234,7 +191,7 @@ const Dashboard = () => {
                 </div>
                 <div className="mt-4 p-3 rounded-lg bg-secondary/50 border border-border">
                   <code className="text-sm text-muted-foreground break-all">
-                    {`${window.location.origin}/signup?token=${coaching.invite_token}`}
+                    {`${window.location.origin}/signup?token=${coaching.inviteToken}`}
                   </code>
                 </div>
               </div>
@@ -262,29 +219,29 @@ const Dashboard = () => {
                   <div className="space-y-3">
                     {pendingStudents.map((student) => (
                       <div
-                        key={student.id}
+                        key={student.uid}
                         className="flex items-center justify-between p-4 rounded-lg bg-secondary/30 border border-border hover:border-primary/30 transition-colors"
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                             <span className="text-lg font-semibold text-primary">
-                              {student.full_name.charAt(0).toUpperCase()}
+                              {student.name.charAt(0).toUpperCase()}
                             </span>
                           </div>
                           <div>
-                            <p className="font-medium text-foreground">{student.full_name}</p>
+                            <p className="font-medium text-foreground">{student.name}</p>
                             <p className="text-xs text-muted-foreground">
-                              {new Date(student.created_at).toLocaleDateString()}
+                              {student.createdAt?.toDate?.()?.toLocaleDateString() || 'Recently'}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => handleStudentStatus(student.id, 'approved')}
-                            disabled={processingId === student.id}
+                            onClick={() => handleStudentStatus(student.uid, 'approved')}
+                            disabled={processingId === student.uid}
                             className="px-4 py-2 rounded-lg bg-success/10 text-success border border-success/20 hover:bg-success/20 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
-                            {processingId === student.id ? (
+                            {processingId === student.uid ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
                               <UserCheck className="w-4 h-4" />
@@ -292,11 +249,11 @@ const Dashboard = () => {
                             <span className="hidden sm:inline">{t.approveStudent}</span>
                           </button>
                           <button
-                            onClick={() => handleStudentStatus(student.id, 'rejected')}
-                            disabled={processingId === student.id}
+                            onClick={() => handleStudentStatus(student.uid, 'rejected')}
+                            disabled={processingId === student.uid}
                             className="px-4 py-2 rounded-lg bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
-                            {processingId === student.id ? (
+                            {processingId === student.uid ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
                               <UserX className="w-4 h-4" />
@@ -318,16 +275,8 @@ const Dashboard = () => {
               {/* Section 1: Status Overview */}
               <section className="animate-fade-in">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <StatusCard 
-                    type="xp" 
-                    label={t.totalXP} 
-                    value={xp} 
-                  />
-                  <StatusCard 
-                    type="streak" 
-                    label={t.currentStreak} 
-                    value={streak} 
-                  />
+                  <StatusCard type="xp" label={t.totalXP} value={xp} />
+                  <StatusCard type="streak" label={t.currentStreak} value={streak} />
                 </div>
               </section>
 
@@ -343,7 +292,7 @@ const Dashboard = () => {
                 </div>
               </section>
 
-              {/* Section 3: Feature Cards Grid - responsive: 2 cols mobile, 3 cols desktop */}
+              {/* Section 3: Feature Cards Grid */}
               <section className="animate-fade-in delay-200 w-full">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 lg:gap-5 w-full">
                   <FeatureCard
@@ -385,35 +334,22 @@ const Dashboard = () => {
                 </div>
               </section>
 
-              {/* Section 4: Performance Dashboard - SEPARATED test vs practice */}
+              {/* Section 4: Performance Dashboard */}
               <section className="animate-fade-in delay-300">
                 <h2 className="text-xl font-display font-bold text-foreground mb-4">
                   {t.performanceTitle}
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <PerformanceCard
-                    type="mcqs-today"
-                    label="Test MCQs"
-                    value={testMcqsToday}
-                  />
-                  <PerformanceCard
-                    type="mcqs-today"
-                    label="Practice MCQs"
-                    value={practiceMcqsToday}
-                  />
+                  <PerformanceCard type="mcqs-today" label="Test MCQs" value={testMcqsToday} />
+                  <PerformanceCard type="mcqs-today" label="Practice MCQs" value={practiceMcqsToday} />
                   <PerformanceCard
                     type="rank"
                     label="Test Accuracy"
                     value={`${todayTestPerformance.accuracy}%`}
                   />
-                  <PerformanceCard
-                    type="rank"
-                    label={t.yourRank}
-                    value="—"
-                  />
+                  <PerformanceCard type="rank" label={t.yourRank} value="—" />
                 </div>
               </section>
-
             </div>
           )}
         </div>

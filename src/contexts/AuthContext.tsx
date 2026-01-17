@@ -1,9 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
+import {
+  getUser,
+  createUser,
+  updateUser,
+  getCoachingByInviteToken,
+  createCoaching,
+  FirebaseUser,
+} from '@/lib/firebaseService';
 
 type UserRole = 'teacher' | 'student' | null;
-type StudentStatus = 'pending' | 'approved' | 'rejected' | null;
+type StudentStatus = 'pending' | 'active' | 'rejected' | null;
 
 interface Profile {
   id: string;
@@ -36,27 +44,40 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Convert Firebase user to Profile format
+const firebaseUserToProfile = (fbUser: FirebaseUser): Profile => ({
+  id: fbUser.uid,
+  user_id: fbUser.uid,
+  full_name: fbUser.name,
+  role: fbUser.role as UserRole,
+  coaching_id: fbUser.coachingId,
+  student_status: fbUser.status as StudentStatus,
+  student_class: fbUser.class || null,
+  board: fbUser.board || null,
+  tone: fbUser.tone || null,
+});
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
+  // Fetch profile from Firebase Firestore
+  const fetchProfile = async (userId: string): Promise<Profile | null> => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        return null;
+      console.log('🔥 FIREBASE: Fetching user profile', userId);
+      const fbUser = await getUser(userId);
+      
+      if (fbUser) {
+        console.log('✅ FIREBASE: User found', fbUser.name);
+        return firebaseUserToProfile(fbUser);
       }
-      return data as Profile | null;
+      
+      console.log('⚠️ FIREBASE: User not found in Firestore', userId);
+      return null;
     } catch (err) {
-      console.error('Profile fetch error:', err);
+      console.error('❌ FIREBASE: Profile fetch error:', err);
       return null;
     }
   };
@@ -79,16 +100,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // Use setTimeout to prevent race conditions
           setTimeout(async () => {
             const profileData = await fetchProfile(currentSession.user.id);
-
-            // Debug log: first login after approval
-            if (profileData?.role === 'student' && profileData?.student_status === 'approved' && profileData?.coaching_id) {
-              console.log("LEADERBOARD WRITE ATTEMPT", {
-                uid: currentSession.user.id,
-                coachingId: profileData.coaching_id,
-                path: `leaderboards/${profileData.coaching_id}/users/${currentSession.user.id}`,
-              });
-            }
-
             setProfile(profileData);
             setLoading(false);
           }, 0);
@@ -105,15 +116,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(existingSession);
         setUser(existingSession.user);
         fetchProfile(existingSession.user.id).then((profileData) => {
-          // Debug log: refresh on page load
-          if (profileData?.role === 'student' && profileData?.student_status === 'approved' && profileData?.coaching_id) {
-            console.log("LEADERBOARD WRITE ATTEMPT", {
-              uid: existingSession.user.id,
-              coachingId: profileData.coaching_id,
-              path: `leaderboards/${profileData.coaching_id}/users/${existingSession.user.id}`,
-            });
-          }
-
           setProfile(profileData);
           setLoading(false);
         });
@@ -134,7 +136,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     inviteToken?: string
   ): Promise<{ error: string | null }> => {
     try {
-      // Sign up the user
+      // Sign up the user via Lovable Auth (identity only)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -154,49 +156,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       let coachingId: string | null = null;
 
       if (role === 'teacher' && coachingName) {
-        // Create coaching for teacher
-        const { data: coachingData, error: coachingError } = await supabase
-          .from('coachings')
-          .insert({
-            name: coachingName,
-            teacher_id: authData.user.id,
-          })
-          .select()
-          .single();
-
-        if (coachingError) {
-          console.error('Coaching creation error:', coachingError);
-          return { error: 'Failed to create coaching center' };
-        }
-        coachingId = coachingData.id;
+        // Create coaching in Firebase
+        coachingId = await createCoaching(authData.user.id, coachingName);
       } else if (role === 'student' && inviteToken) {
-        // Find coaching by invite token
-        const { data: coachingData, error: coachingError } = await supabase
-          .from('coachings')
-          .select('id')
-          .eq('invite_token', inviteToken)
-          .maybeSingle();
-
-        if (coachingError || !coachingData) {
+        // Find coaching by invite token in Firebase
+        const coaching = await getCoachingByInviteToken(inviteToken);
+        if (!coaching) {
           return { error: 'Invalid invite token' };
         }
-        coachingId = coachingData.id;
+        coachingId = coaching.coachingId;
       }
 
-      // Create profile
-      const { error: profileError } = await supabase.from('profiles').insert({
-        user_id: authData.user.id,
-        full_name: fullName,
+      // Create user profile in Firebase Firestore
+      await createUser(authData.user.id, {
         role,
-        coaching_id: coachingId,
-        student_status: role === 'student' ? 'pending' : null,
+        name: fullName,
+        email,
+        coachingId,
+        status: role === 'student' ? 'pending' : 'active',
       });
 
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        return { error: 'Failed to create profile' };
-      }
-
+      console.log('✅ FIREBASE: User created successfully', authData.user.id);
       return { error: null };
     } catch (err) {
       console.error('Signup error:', err);
@@ -231,7 +211,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isTeacher = profile?.role === 'teacher';
   const isStudent = profile?.role === 'student';
-  const isApproved = isTeacher || (isStudent && profile?.student_status === 'approved');
+  const isApproved = isTeacher || (isStudent && profile?.student_status === 'active');
   const isPending = isStudent && profile?.student_status === 'pending';
   const isOnboarded = isTeacher || (isStudent && !!profile?.student_class && !!profile?.board && !!profile?.tone);
   const coachingId = profile?.coaching_id ?? null;

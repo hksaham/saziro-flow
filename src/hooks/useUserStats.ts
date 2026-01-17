@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  getUserStats,
+  updateUserStatsAfterTest,
+  getTodayPerformance,
+} from '@/lib/firebaseService';
 
 interface UserStats {
   total_xp: number;
@@ -33,11 +37,11 @@ export const useUserStats = () => {
     practiceAttempts: 0,
     practiceCorrect: 0,
     practiceTotal: 0,
-    practiceAccuracy: 0
+    practiceAccuracy: 0,
   });
   const [loading, setLoading] = useState(true);
 
-  // Fetch user stats
+  // Fetch user stats from Firebase
   const fetchStats = useCallback(async () => {
     if (!user) {
       setLoading(false);
@@ -45,196 +49,79 @@ export const useUserStats = () => {
     }
 
     try {
-      // Fetch or create user stats
-      let { data: statsData, error } = await supabase
-        .from('user_stats')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      console.log('🔥 FIREBASE: Fetching user stats', user.id);
 
-      if (error) {
-        console.error('Error fetching stats:', error);
-        setLoading(false);
-        return;
-      }
+      const [firebaseStats, performance] = await Promise.all([
+        getUserStats(user.id),
+        getTodayPerformance(user.id),
+      ]);
 
-      // If no stats exist, create initial stats
-      if (!statsData) {
-        const { data: newStats, error: insertError } = await supabase
-          .from('user_stats')
-          .insert({
-            user_id: user.id,
-            coaching_id: coachingId,
-            total_xp: 0,
-            current_streak: 0,
-            longest_streak: 0
-          })
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('Error creating stats:', insertError);
-        } else {
-          statsData = newStats;
-        }
-      }
-
-      setStats(statsData);
-
-      // Fetch today's performance - SEPARATED by mode
-      const today = new Date().toISOString().split('T')[0];
-      const { data: perfData, error: perfError } = await supabase
-        .from('mcq_performance')
-        .select('mode, correct_answers, total_questions, xp_earned')
-        .eq('user_id', user.id)
-        .gte('created_at', `${today}T00:00:00`)
-        .lte('created_at', `${today}T23:59:59`);
-
-      if (perfError) {
-        console.error('Error fetching performance:', perfError);
-      } else if (perfData && perfData.length > 0) {
-        // Separate test vs practice performance
-        const testPerf = perfData.filter(p => p.mode === 'test');
-        const practicePerf = perfData.filter(p => p.mode === 'practice');
-
-        const testCorrect = testPerf.reduce((sum, p) => sum + p.correct_answers, 0);
-        const testTotal = testPerf.reduce((sum, p) => sum + p.total_questions, 0);
-        const testXp = testPerf.reduce((sum, p) => sum + p.xp_earned, 0);
-
-        const practiceCorrect = practicePerf.reduce((sum, p) => sum + p.correct_answers, 0);
-        const practiceTotal = practicePerf.reduce((sum, p) => sum + p.total_questions, 0);
-
-        setTodayPerformance({
-          testAttempts: testPerf.length,
-          testCorrect,
-          testTotal,
-          testAccuracy: testTotal > 0 ? Math.round((testCorrect / testTotal) * 100) : 0,
-          testXpEarned: testXp,
-          practiceAttempts: practicePerf.length,
-          practiceCorrect,
-          practiceTotal,
-          practiceAccuracy: practiceTotal > 0 ? Math.round((practiceCorrect / practiceTotal) * 100) : 0
+      if (firebaseStats) {
+        setStats({
+          total_xp: firebaseStats.totalXp,
+          current_streak: firebaseStats.currentStreak,
+          longest_streak: firebaseStats.longestStreak,
+          last_activity_date: firebaseStats.lastActivityDate,
+        });
+      } else {
+        setStats({
+          total_xp: 0,
+          current_streak: 0,
+          longest_streak: 0,
+          last_activity_date: null,
         });
       }
 
+      setTodayPerformance({
+        testAttempts: 0, // Will be calculated from results
+        testCorrect: 0,
+        testTotal: performance.testTotal,
+        testAccuracy: performance.testAccuracy,
+        testXpEarned: 0,
+        practiceAttempts: 0,
+        practiceCorrect: 0,
+        practiceTotal: performance.practiceTotal,
+        practiceAccuracy: 0,
+      });
+
+      console.log('✅ FIREBASE: User stats loaded');
       setLoading(false);
     } catch (err) {
-      console.error('Stats fetch error:', err);
+      console.error('❌ FIREBASE: Error fetching stats:', err);
       setLoading(false);
     }
-  }, [user, coachingId]);
+  }, [user]);
 
   // Update XP and streak ONLY for test completion
   // STRICT: Practice mode should NEVER call this
-  const updateStatsForTest = useCallback(async (xpEarned: number) => {
-    if (!user || !stats) return;
+  const updateStatsForTest = useCallback(
+    async (xpEarned: number) => {
+      if (!user) return;
 
-    const today = new Date().toISOString().split('T')[0];
-    const lastActivity = stats.last_activity_date;
-    
-    // Calculate streak - ONLY increments on test completion
-    let newStreak = stats.current_streak;
-    if (lastActivity !== today) {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      
-      if (lastActivity === yesterdayStr) {
-        // Consecutive day - increment streak
-        newStreak = stats.current_streak + 1;
-      } else if (lastActivity === null || lastActivity < yesterdayStr) {
-        // Streak broken - reset to 1
-        newStreak = 1;
+      try {
+        console.log('🔥 FIREBASE: Updating user stats', user.id, `+${xpEarned} XP`);
+        await updateUserStatsAfterTest(user.id, xpEarned);
+
+        // Refresh stats
+        await fetchStats();
+        console.log(`✅ FIREBASE: Test stats updated: +${xpEarned} XP`);
+      } catch (err) {
+        console.error('❌ FIREBASE: Stats update error:', err);
       }
-    }
+    },
+    [user, fetchStats]
+  );
 
-    const newLongestStreak = Math.max(stats.longest_streak, newStreak);
-    
-    // XP calculation for test: +10 per correct, -5 per wrong
-    // xpEarned is already calculated correctly in savePerformance
-    const newTotalXp = Math.max(0, stats.total_xp + xpEarned);
-
-    try {
-      const { error } = await supabase
-        .from('user_stats')
-        .update({
-          total_xp: newTotalXp,
-          current_streak: newStreak,
-          longest_streak: newLongestStreak,
-          last_activity_date: today
-        })
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error updating stats:', error);
-        return;
-      }
-
-      // Update local state
-      setStats(prev => prev ? {
-        ...prev,
-        total_xp: newTotalXp,
-        current_streak: newStreak,
-        longest_streak: newLongestStreak,
-        last_activity_date: today
-      } : null);
-
-      console.log(`✅ Test stats updated: +${xpEarned} XP (total: ${newTotalXp}), streak: ${newStreak}`);
-    } catch (err) {
-      console.error('Stats update error:', err);
-    }
-  }, [user, stats]);
-
-  // Set up realtime subscription
   useEffect(() => {
-    if (!user) return;
-
     fetchStats();
-
-    // Subscribe to realtime updates
-    const channel = supabase
-      .channel('user-stats-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'user_stats',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          console.log('📊 Stats updated in realtime:', payload);
-          if (payload.new) {
-            setStats(payload.new as UserStats);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'mcq_performance',
-          filter: `user_id=eq.${user.id}`
-        },
-        () => {
-          // Refetch today's performance on new MCQ completion
-          fetchStats();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, fetchStats]);
+  }, [fetchStats]);
 
   // Legacy compatibility - returns combined questions count
   const todayPerformanceLegacy = {
     attempts: todayPerformance.testAttempts + todayPerformance.practiceAttempts,
     totalCorrect: todayPerformance.testCorrect + todayPerformance.practiceCorrect,
     totalQuestions: todayPerformance.testTotal + todayPerformance.practiceTotal,
-    accuracy: todayPerformance.testAccuracy // Only test accuracy shown
+    accuracy: todayPerformance.testAccuracy, // Only test accuracy shown
   };
 
   return {
@@ -245,16 +132,16 @@ export const useUserStats = () => {
       correct: todayPerformance.testCorrect,
       total: todayPerformance.testTotal,
       accuracy: todayPerformance.testAccuracy,
-      xpEarned: todayPerformance.testXpEarned
+      xpEarned: todayPerformance.testXpEarned,
     },
     todayPracticePerformance: {
       attempts: todayPerformance.practiceAttempts,
       correct: todayPerformance.practiceCorrect,
       total: todayPerformance.practiceTotal,
-      accuracy: todayPerformance.practiceAccuracy
+      accuracy: todayPerformance.practiceAccuracy,
     },
     loading,
     updateStats: updateStatsForTest, // Only for test mode
-    refetch: fetchStats
+    refetch: fetchStats,
   };
 };

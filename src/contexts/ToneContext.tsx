@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { updateUser } from '@/lib/firebaseService';
 
 export type ToneType = 'chill-bro' | 'friendly-banglish' | 'formal-bangla';
 
@@ -243,13 +244,11 @@ export const ToneProvider = ({ children }: { children: ReactNode }) => {
 
   const setTone = async (newTone: ToneType) => {
     setToneState(newTone);
-    // Persist to database
+    // Persist to Firebase
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase
-        .from('profiles')
-        .update({ tone: newTone })
-        .eq('user_id', user.id);
+      await updateUser(user.id, { tone: newTone });
+      console.log('✅ FIREBASE: Tone updated to', newTone);
     }
   };
 

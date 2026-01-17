@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { updateUser } from '@/lib/firebaseService';
 import Logo from '@/components/ui/Logo';
 import { Loader2, GraduationCap, MapPin, MessageCircle, ArrowRight, CheckCircle } from 'lucide-react';
 
@@ -80,20 +80,13 @@ const StudentOnboarding = () => {
     setError('');
 
     try {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          student_class: studentClass,
-          board: board,
-          tone: tone,
-        })
-        .eq('user_id', user.id);
-
-      if (updateError) {
-        console.error('Profile update error:', updateError);
-        setError('Failed to save your preferences. Please try again.');
-        return;
-      }
+      // Update profile in Firebase
+      await updateUser(user.id, {
+        class: studentClass,
+        board: board,
+        tone: tone,
+      });
+      console.log('✅ FIREBASE: Onboarding profile updated');
 
       // Refresh the profile to get updated data
       await refreshProfile();

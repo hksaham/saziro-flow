@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTone, ToneType } from '@/contexts/ToneContext';
 import { useUserStats } from '@/hooks/useUserStats';
+import { updateUser, getTodayPerformance } from '@/lib/firebaseService';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   ArrowLeft, 
@@ -68,55 +69,27 @@ const Profile = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  // Fetch performance metrics
+  // Fetch performance metrics from Firebase
   useEffect(() => {
     const fetchMetrics = async () => {
       if (!user) return;
 
       try {
-        // Fetch all MCQ performance
-        const { data: perfData, error: perfError } = await supabase
-          .from('mcq_performance')
-          .select('correct_answers, total_questions, mode')
-          .eq('user_id', user.id);
-
-        if (perfError) throw perfError;
-
-        if (perfData && perfData.length > 0) {
-          const totalCorrect = perfData.reduce((sum, p) => sum + p.correct_answers, 0);
-          const totalQuestions = perfData.reduce((sum, p) => sum + p.total_questions, 0);
-          
-          setPerformanceMetrics({
-            totalMcqsAttempted: totalQuestions,
-            overallAccuracy: totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0,
-            strongestSubject: 'Physics', // Placeholder - would need subject tracking
-            weakestSubject: 'Chemistry'  // Placeholder - would need subject tracking
-          });
-        }
-
-        // Fetch today's usage
-        const today = new Date().toISOString().split('T')[0];
+        // Fetch today's performance from Firebase
+        const todayPerf = await getTodayPerformance(user.id);
         
-        // Test attempts today
-        const { data: testAttempts } = await supabase
-          .from('daily_test_attempts')
-          .select('id')
-          .eq('user_id', user.id)
-          .gte('completed_at', `${today}T00:00:00`)
-          .lte('completed_at', `${today}T23:59:59`);
+        setPerformanceMetrics({
+          totalMcqsAttempted: todayPerf.testTotal + todayPerf.practiceTotal,
+          overallAccuracy: todayPerf.testAccuracy,
+          strongestSubject: 'Physics', // Placeholder
+          weakestSubject: 'Chemistry'  // Placeholder
+        });
 
-        // Practice attempts today
-        const { data: practiceAttempts } = await supabase
-          .from('practice_attempts')
-          .select('id')
-          .eq('user_id', user.id)
-          .gte('created_at', `${today}T00:00:00`)
-          .lte('created_at', `${today}T23:59:59`);
-
+        // Daily usage from Firebase (approximation based on today's data)
         setDailyUsage({
-          testUsed: testAttempts?.length || 0,
+          testUsed: todayPerf.testTotal > 0 ? 1 : 0,
           testLimit: 1,
-          practiceUsed: practiceAttempts?.length || 0,
+          practiceUsed: todayPerf.practiceTotal > 0 ? Math.ceil(todayPerf.practiceTotal / 10) : 0,
           practiceLimit: 3
         });
       } catch (err) {
@@ -141,12 +114,8 @@ const Profile = () => {
     
     setSavingName(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ full_name: editedName.trim() })
-        .eq('user_id', user.id);
-
-      if (error) throw error;
+      // Update in Firebase
+      await updateUser(user.id, { name: editedName.trim() });
 
       await refreshProfile();
       setIsEditingName(false);

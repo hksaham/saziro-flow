@@ -95,12 +95,45 @@ const Dashboard = () => {
   const handleStudentStatus = async (studentId: string, status: 'approved' | 'rejected') => {
     setProcessingId(studentId);
     try {
+      // First get the student's profile data for leaderboard creation
+      const student = pendingStudents.find(s => s.id === studentId);
+      
+      // Update student status
       const { error } = await supabase
         .from('profiles')
         .update({ student_status: status })
         .eq('id', studentId);
 
       if (error) throw error;
+
+      // If APPROVED, create leaderboard entry immediately (roster entry with XP=0)
+      if (status === 'approved' && student && coachingId) {
+        // Get full profile data for class/board info
+        const { data: fullProfile } = await supabase
+          .from('profiles')
+          .select('student_class, board')
+          .eq('id', studentId)
+          .single();
+
+        // Create LIVE leaderboard entry (XP=0, appears immediately)
+        await supabase
+          .from('live_leaderboard')
+          .insert({
+            coaching_id: coachingId,
+            user_id: student.user_id,
+            full_name: student.full_name,
+            student_class: fullProfile?.student_class || null,
+            board: fullProfile?.board || null,
+            total_xp: 0,
+            correct_answers: 0,
+            wrong_answers: 0,
+            accuracy: 0,
+            tests_taken: 0,
+            last_test_at: null
+          });
+
+        console.log('✅ Created leaderboard entry for approved student:', student.full_name);
+      }
 
       // Remove from pending list
       setPendingStudents((prev) => prev.filter((s) => s.id !== studentId));

@@ -12,13 +12,13 @@ import {
   ArrowLeft,
   Trophy,
   Medal,
-  Award,
   Target,
   Zap,
   Calendar,
   CalendarDays,
   Crown,
   AlertCircle,
+  Radio,
 } from 'lucide-react';
 
 const getRankIcon = (rank: number) => {
@@ -54,9 +54,10 @@ interface LeaderboardTableProps {
   }>;
   currentUserId: string | undefined;
   loading: boolean;
+  isLive?: boolean;
 }
 
-const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ entries, currentUserId, loading }) => {
+const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ entries, currentUserId, loading, isLive }) => {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -71,7 +72,7 @@ const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ entries, currentUse
     return (
       <div className="text-center py-12">
         <Trophy className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-        <p className="text-muted-foreground">No test submissions yet this period</p>
+        <p className="text-muted-foreground">No test submissions yet</p>
         <p className="text-sm text-muted-foreground mt-1">Be the first to top the leaderboard!</p>
       </div>
     );
@@ -146,8 +147,8 @@ const LeaderboardTable: React.FC<LeaderboardTableProps> = ({ entries, currentUse
 const Leaderboard: React.FC = () => {
   const navigate = useNavigate();
   const { user, coachingId } = useAuth();
-  const { weekly, monthly, userWeeklyRank, userMonthlyRank, loading, error } = useLeaderboard();
-  const [activeTab, setActiveTab] = useState<'weekly' | 'monthly'>('weekly');
+  const { live, weekly, monthly, userLiveRank, userWeeklyRank, userMonthlyRank, loading, error } = useLeaderboard();
+  const [activeTab, setActiveTab] = useState<'live' | 'weekly' | 'monthly'>('live');
 
   // Block if no coaching
   if (!coachingId) {
@@ -201,10 +202,21 @@ const Leaderboard: React.FC = () => {
         </div>
 
         {/* User Rank Summary */}
-        {(userWeeklyRank || userMonthlyRank) && (
+        {(userLiveRank || userWeeklyRank || userMonthlyRank) && (
           <Card className="mb-6 bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
             <CardContent className="py-4">
-              <div className="flex items-center justify-center gap-8">
+              <div className="flex items-center justify-center gap-6 flex-wrap">
+                {userLiveRank && (
+                  <div className="text-center">
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
+                      <Radio className="w-4 h-4 text-red-500" />
+                      Live
+                    </div>
+                    <Badge variant="destructive" className="text-lg px-3 py-1">
+                      Rank #{userLiveRank}
+                    </Badge>
+                  </div>
+                )}
                 {userWeeklyRank && (
                   <div className="text-center">
                     <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
@@ -233,8 +245,15 @@ const Leaderboard: React.FC = () => {
         )}
 
         {/* Leaderboard Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'weekly' | 'monthly')}>
-          <TabsList className="grid w-full grid-cols-2 mb-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'live' | 'weekly' | 'monthly')}>
+          <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsTrigger value="live" className="gap-2">
+              <Radio className="w-4 h-4" />
+              <span className="relative">
+                Live
+                <span className="absolute -top-1 -right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              </span>
+            </TabsTrigger>
             <TabsTrigger value="weekly" className="gap-2">
               <Calendar className="w-4 h-4" />
               Weekly
@@ -244,6 +263,29 @@ const Leaderboard: React.FC = () => {
               Monthly
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="live" className="mt-0">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Radio className="w-5 h-5 text-red-500" />
+                  Live Rankings
+                  <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal text-red-500">
+                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                    Real-time
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <LeaderboardTable
+                  entries={live}
+                  currentUserId={user?.id}
+                  loading={loading}
+                  isLive
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="weekly" className="mt-0">
             <Card>
@@ -291,9 +333,10 @@ const Leaderboard: React.FC = () => {
 
         {/* Info Footer */}
         <div className="mt-8 text-center text-xs text-muted-foreground space-y-1">
+          <p>🔴 Live rankings update instantly after each test</p>
           <p>📊 Rankings based on TEST mode submissions only</p>
           <p>⚡ XP: +10 per correct, -5 per wrong answer</p>
-          <p>🔄 Resets every week (Sunday) and month</p>
+          <p>🔄 Weekly/Monthly leaderboards reset periodically</p>
         </div>
       </main>
     </div>

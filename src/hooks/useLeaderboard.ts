@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -17,8 +17,10 @@ interface LeaderboardEntry {
 }
 
 interface LeaderboardData {
+  live: LeaderboardEntry[];
   weekly: LeaderboardEntry[];
   monthly: LeaderboardEntry[];
+  userLiveRank: number | null;
   userWeeklyRank: number | null;
   userMonthlyRank: number | null;
 }
@@ -44,13 +46,39 @@ const getCurrentMonthId = (): string => {
 export const useLeaderboard = () => {
   const { user, coachingId, profile } = useAuth();
   const [data, setData] = useState<LeaderboardData>({
+    live: [],
     weekly: [],
     monthly: [],
+    userLiveRank: null,
     userWeeklyRank: null,
     userMonthlyRank: null
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Fetch LIVE leaderboard with real-time subscription
+  const fetchLiveLeaderboard = useCallback(async () => {
+    if (!user || !coachingId) return [];
+
+    const { data: liveData, error: liveError } = await supabase
+      .from('live_leaderboard')
+      .select('*')
+      .eq('coaching_id', coachingId)
+      .order('total_xp', { ascending: false })
+      .order('accuracy', { ascending: false })
+      .order('last_test_at', { ascending: true });
+
+    if (liveError) {
+      console.error('Live leaderboard error:', liveError);
+      throw liveError;
+    }
+
+    return (liveData || []).map((entry, index) => ({
+      ...entry,
+      rank: index + 1
+    }));
+  }, [user, coachingId]);
 
   const fetchLeaderboard = useCallback(async () => {
     if (!user || !coachingId) {
@@ -67,58 +95,54 @@ export const useLeaderboard = () => {
       const monthId = getCurrentMonthId();
 
       console.log(`📊 Fetching leaderboard for coaching: ${coachingId}`);
-      console.log(`📅 Week ID: ${weekId}, Month ID: ${monthId}`);
 
-      // Fetch weekly leaderboard - sorted by XP DESC, accuracy DESC, updated_at ASC
-      const { data: weeklyData, error: weeklyError } = await supabase
-        .from('weekly_leaderboard')
-        .select('*')
-        .eq('coaching_id', coachingId)
-        .eq('week_id', weekId)
-        .order('total_xp', { ascending: false })
-        .order('accuracy', { ascending: false })
-        .order('updated_at', { ascending: true });
+      // Fetch all leaderboards in parallel
+      const [liveResult, weeklyResult, monthlyResult] = await Promise.all([
+        fetchLiveLeaderboard(),
+        supabase
+          .from('weekly_leaderboard')
+          .select('*')
+          .eq('coaching_id', coachingId)
+          .eq('week_id', weekId)
+          .order('total_xp', { ascending: false })
+          .order('accuracy', { ascending: false })
+          .order('updated_at', { ascending: true }),
+        supabase
+          .from('monthly_leaderboard')
+          .select('*')
+          .eq('coaching_id', coachingId)
+          .eq('month_id', monthId)
+          .order('total_xp', { ascending: false })
+          .order('accuracy', { ascending: false })
+          .order('updated_at', { ascending: true })
+      ]);
 
-      if (weeklyError) {
-        console.error('Weekly leaderboard error:', weeklyError);
-        throw weeklyError;
-      }
-
-      // Fetch monthly leaderboard
-      const { data: monthlyData, error: monthlyError } = await supabase
-        .from('monthly_leaderboard')
-        .select('*')
-        .eq('coaching_id', coachingId)
-        .eq('month_id', monthId)
-        .order('total_xp', { ascending: false })
-        .order('accuracy', { ascending: false })
-        .order('updated_at', { ascending: true });
-
-      if (monthlyError) {
-        console.error('Monthly leaderboard error:', monthlyError);
-        throw monthlyError;
-      }
+      if (weeklyResult.error) throw weeklyResult.error;
+      if (monthlyResult.error) throw monthlyResult.error;
 
       // Add ranks
-      const rankedWeekly = (weeklyData || []).map((entry, index) => ({
+      const rankedWeekly = (weeklyResult.data || []).map((entry, index) => ({
         ...entry,
         rank: index + 1
       }));
 
-      const rankedMonthly = (monthlyData || []).map((entry, index) => ({
+      const rankedMonthly = (monthlyResult.data || []).map((entry, index) => ({
         ...entry,
         rank: index + 1
       }));
 
       // Find user's ranks
+      const userLiveEntry = liveResult.find(e => e.user_id === user.id);
       const userWeeklyEntry = rankedWeekly.find(e => e.user_id === user.id);
       const userMonthlyEntry = rankedMonthly.find(e => e.user_id === user.id);
 
-      console.log(`✅ Weekly entries: ${rankedWeekly.length}, Monthly entries: ${rankedMonthly.length}`);
+      console.log(`✅ Live: ${liveResult.length}, Weekly: ${rankedWeekly.length}, Monthly: ${rankedMonthly.length}`);
 
       setData({
+        live: liveResult,
         weekly: rankedWeekly,
         monthly: rankedMonthly,
+        userLiveRank: userLiveEntry?.rank || null,
         userWeeklyRank: userWeeklyEntry?.rank || null,
         userMonthlyRank: userMonthlyEntry?.rank || null
       });
@@ -128,9 +152,9 @@ export const useLeaderboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, coachingId]);
+  }, [user, coachingId, fetchLiveLeaderboard]);
 
-  // Update leaderboard after TEST submission (NOT practice)
+  // Update LIVE leaderboard after TEST submission (NOT practice)
   const updateLeaderboardForTest = useCallback(async (
     correctAnswers: number,
     wrongAnswers: number,
@@ -153,6 +177,53 @@ export const useLeaderboard = () => {
     console.log(`📊 Updating leaderboard: +${correctAnswers * 10} - ${wrongAnswers * 5} = ${xpChange} XP`);
 
     try {
+      // Update LIVE leaderboard (cumulative, never resets)
+      const { data: existingLive } = await supabase
+        .from('live_leaderboard')
+        .select('*')
+        .eq('coaching_id', coachingId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingLive) {
+        const newTotalXp = existingLive.total_xp + xpChange;
+        const newCorrect = existingLive.correct_answers + correctAnswers;
+        const newWrong = existingLive.wrong_answers + wrongAnswers;
+        const newTestsTaken = existingLive.tests_taken + 1;
+        const newAccuracy = (newCorrect + newWrong) > 0 
+          ? Number(((newCorrect / (newCorrect + newWrong)) * 100).toFixed(2))
+          : 0;
+
+        await supabase
+          .from('live_leaderboard')
+          .update({
+            total_xp: Math.max(0, newTotalXp),
+            correct_answers: newCorrect,
+            wrong_answers: newWrong,
+            accuracy: newAccuracy,
+            tests_taken: newTestsTaken,
+            last_test_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingLive.id);
+      } else {
+        await supabase
+          .from('live_leaderboard')
+          .insert({
+            coaching_id: coachingId,
+            user_id: user.id,
+            full_name: profile.full_name,
+            student_class: profile.student_class,
+            board: profile.board,
+            total_xp: Math.max(0, xpChange),
+            correct_answers: correctAnswers,
+            wrong_answers: wrongAnswers,
+            accuracy,
+            tests_taken: 1,
+            last_test_at: new Date().toISOString()
+          });
+      }
+
       // Update weekly leaderboard
       const { data: existingWeekly } = await supabase
         .from('weekly_leaderboard')
@@ -163,7 +234,6 @@ export const useLeaderboard = () => {
         .maybeSingle();
 
       if (existingWeekly) {
-        // Update existing entry
         const newTotalXp = existingWeekly.total_xp + xpChange;
         const newCorrect = existingWeekly.correct_answers + correctAnswers;
         const newWrong = existingWeekly.wrong_answers + wrongAnswers;
@@ -175,7 +245,7 @@ export const useLeaderboard = () => {
         await supabase
           .from('weekly_leaderboard')
           .update({
-            total_xp: Math.max(0, newTotalXp), // Don't go negative
+            total_xp: Math.max(0, newTotalXp),
             correct_answers: newCorrect,
             wrong_answers: newWrong,
             accuracy: newAccuracy,
@@ -184,7 +254,6 @@ export const useLeaderboard = () => {
           })
           .eq('id', existingWeekly.id);
       } else {
-        // Insert new entry
         await supabase
           .from('weekly_leaderboard')
           .insert({
@@ -249,7 +318,7 @@ export const useLeaderboard = () => {
           });
       }
 
-      console.log('✅ Leaderboard updated successfully');
+      console.log('✅ All leaderboards updated successfully');
       return true;
     } catch (err: any) {
       console.error('❌ Error updating leaderboard:', err);
@@ -257,11 +326,43 @@ export const useLeaderboard = () => {
     }
   }, [user, coachingId, profile]);
 
-  // Set up realtime subscription
+  // Set up real-time subscription for LIVE leaderboard
   useEffect(() => {
     fetchLeaderboard();
 
-    // Subscribe to changes in leaderboard tables
+    if (!coachingId) return;
+
+    // Subscribe to LIVE leaderboard changes with filter for coaching_id
+    const channel = supabase
+      .channel(`live_leaderboard_${coachingId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'live_leaderboard',
+          filter: `coaching_id=eq.${coachingId}`
+        },
+        async (payload) => {
+          console.log('🔴 LIVE leaderboard update received:', payload.eventType);
+          // Refetch to get properly sorted data
+          const liveData = await fetchLiveLeaderboard();
+          const userLiveEntry = liveData.find(e => e.user_id === user?.id);
+          
+          setData(prev => ({
+            ...prev,
+            live: liveData,
+            userLiveRank: userLiveEntry?.rank || null
+          }));
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Live leaderboard subscription:', status);
+      });
+
+    channelRef.current = channel;
+
+    // Also subscribe to weekly/monthly for periodic updates
     const weeklyChannel = supabase
       .channel('weekly_leaderboard_changes')
       .on(
@@ -269,11 +370,10 @@ export const useLeaderboard = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'weekly_leaderboard'
+          table: 'weekly_leaderboard',
+          filter: `coaching_id=eq.${coachingId}`
         },
-        () => {
-          fetchLeaderboard();
-        }
+        () => fetchLeaderboard()
       )
       .subscribe();
 
@@ -284,19 +384,21 @@ export const useLeaderboard = () => {
         {
           event: '*',
           schema: 'public',
-          table: 'monthly_leaderboard'
+          table: 'monthly_leaderboard',
+          filter: `coaching_id=eq.${coachingId}`
         },
-        () => {
-          fetchLeaderboard();
-        }
+        () => fetchLeaderboard()
       )
       .subscribe();
 
     return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
       supabase.removeChannel(weeklyChannel);
       supabase.removeChannel(monthlyChannel);
     };
-  }, [fetchLeaderboard]);
+  }, [coachingId, fetchLeaderboard, fetchLiveLeaderboard, user?.id]);
 
   return {
     ...data,

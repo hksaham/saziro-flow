@@ -79,6 +79,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // Use setTimeout to prevent race conditions
           setTimeout(async () => {
             const profileData = await fetchProfile(currentSession.user.id);
+
+            // Debug log: first login after approval
+            if (profileData?.role === 'student' && profileData?.student_status === 'approved' && profileData?.coaching_id) {
+              console.log("LEADERBOARD WRITE ATTEMPT", {
+                uid: currentSession.user.id,
+                coachingId: profileData.coaching_id,
+                path: `leaderboards/${profileData.coaching_id}/users/${currentSession.user.id}`,
+              });
+            }
+
             setProfile(profileData);
             setLoading(false);
           }, 0);
@@ -95,6 +105,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setSession(existingSession);
         setUser(existingSession.user);
         fetchProfile(existingSession.user.id).then((profileData) => {
+          // Debug log: refresh on page load
+          if (profileData?.role === 'student' && profileData?.student_status === 'approved' && profileData?.coaching_id) {
+            console.log("LEADERBOARD WRITE ATTEMPT", {
+              uid: existingSession.user.id,
+              coachingId: profileData.coaching_id,
+              path: `leaderboards/${profileData.coaching_id}/users/${existingSession.user.id}`,
+            });
+          }
+
           setProfile(profileData);
           setLoading(false);
         });

@@ -116,7 +116,13 @@ const Dashboard = () => {
           .single();
 
         // Create LIVE leaderboard entry (XP=0, appears immediately)
-        await supabase
+        console.log("LEADERBOARD WRITE ATTEMPT", {
+          uid: student.user_id,
+          coachingId,
+          path: `leaderboards/${coachingId}/users/${student.user_id}`,
+        });
+
+        const { error: leaderboardInsertError } = await supabase
           .from('live_leaderboard')
           .insert({
             coaching_id: coachingId,
@@ -132,7 +138,17 @@ const Dashboard = () => {
             last_test_at: null
           });
 
-        console.log('✅ Created leaderboard entry for approved student:', student.full_name);
+        console.log("LEADERBOARD WRITE RESULT", {
+          uid: student.user_id,
+          coachingId,
+          error: leaderboardInsertError?.message ?? null,
+        });
+
+        if (leaderboardInsertError) {
+          console.error('❌ Leaderboard insert failed:', leaderboardInsertError);
+        } else {
+          console.log('✅ Created leaderboard entry for approved student:', student.full_name);
+        }
       }
 
       // Remove from pending list

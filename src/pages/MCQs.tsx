@@ -257,6 +257,15 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
       const wrongCount = answeredQuestions.filter(q => !q.isCorrect).length;
       const totalQuestions = answeredQuestions.length;
       const scorePercentage = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
+
+      // Debug log: after test submit
+      if (mode === 'test' && user?.id && coachingId) {
+        console.log("LEADERBOARD WRITE ATTEMPT", {
+          uid: user.id,
+          coachingId,
+          path: `leaderboards/${coachingId}/users/${user.id}`,
+        });
+      }
       
       // XP calculation: TEST = +10 correct, -5 wrong | PRACTICE = 0
       let calculatedXp = 0;

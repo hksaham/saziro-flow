@@ -61,6 +61,11 @@ export const useLeaderboard = () => {
   const fetchLiveLeaderboard = useCallback(async () => {
     if (!user || !coachingId) return [];
 
+    console.log("LEADERBOARD READ", {
+      coachingId,
+      queryPath: `leaderboards/${coachingId}/users`,
+    });
+
     const { data: liveData, error: liveError } = await supabase
       .from('live_leaderboard')
       .select('*')
@@ -68,6 +73,8 @@ export const useLeaderboard = () => {
       .order('total_xp', { ascending: false })
       .order('accuracy', { ascending: false })
       .order('last_test_at', { ascending: true });
+
+    console.log("LEADERBOARD SNAPSHOT SIZE", liveData?.length ?? 0);
 
     if (liveError) {
       console.error('Live leaderboard error:', liveError);

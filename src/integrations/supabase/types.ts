@@ -128,6 +128,65 @@ export type Database = {
           },
         ]
       }
+      live_leaderboard: {
+        Row: {
+          accuracy: number
+          board: string | null
+          coaching_id: string
+          correct_answers: number
+          created_at: string
+          full_name: string
+          id: string
+          last_test_at: string | null
+          student_class: string | null
+          tests_taken: number
+          total_xp: number
+          updated_at: string
+          user_id: string
+          wrong_answers: number
+        }
+        Insert: {
+          accuracy?: number
+          board?: string | null
+          coaching_id: string
+          correct_answers?: number
+          created_at?: string
+          full_name: string
+          id?: string
+          last_test_at?: string | null
+          student_class?: string | null
+          tests_taken?: number
+          total_xp?: number
+          updated_at?: string
+          user_id: string
+          wrong_answers?: number
+        }
+        Update: {
+          accuracy?: number
+          board?: string | null
+          coaching_id?: string
+          correct_answers?: number
+          created_at?: string
+          full_name?: string
+          id?: string
+          last_test_at?: string | null
+          student_class?: string | null
+          tests_taken?: number
+          total_xp?: number
+          updated_at?: string
+          user_id?: string
+          wrong_answers?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_leaderboard_coaching_id_fkey"
+            columns: ["coaching_id"]
+            isOneToOne: false
+            referencedRelation: "coachings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mcq_performance: {
         Row: {
           coaching_id: string | null

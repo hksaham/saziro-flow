@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDailyTest } from '@/hooks/useDailyTest';
 import { useUserStats } from '@/hooks/useUserStats';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
-import { supabase } from '@/integrations/supabase/client';
+import { saveTestResult, savePracticeResult, saveMistakes } from '@/lib/firebaseService';
 import MCQLanding from '@/components/mcq/MCQLanding';
 import MCQTest from '@/components/mcq/MCQTest';
 import MCQCompletion from '@/components/mcq/MCQCompletion';
@@ -276,67 +276,79 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
         calculatedXp = Math.max(0, calculatedXp); // Never negative
       }
 
-      // Save performance record
-      const { data: perfData, error: perfError } = await supabase
-        .from('mcq_performance')
-        .insert({
-          user_id: user!.id,
-          coaching_id: coachingId,
-          mode,
-          total_questions: totalQuestions,
-          correct_answers: correctCount,
-          wrong_answers: wrongCount,
-          score_percentage: scorePercentage,
-          time_taken_seconds: timeTakenSeconds,
-          xp_earned: calculatedXp
-        })
-        .select()
-        .single();
+      // Save performance record to Firebase
+      if (mode === 'test') {
+        const testId = await saveTestResult(user!.id, {
+          setId: dailyTestId || `test_${Date.now()}`,
+          coachingId: coachingId!,
+          correct: correctCount,
+          wrong: wrongCount,
+          score: scorePercentage,
+          timeTakenSeconds,
+        });
+        console.log('✅ FIREBASE: Saved test result', testId);
 
-      if (perfError) {
-        console.error('Error saving performance:', perfError);
-      } else {
-        // Save wrong answers to mistake notebook with mode
+        // Save wrong answers to Firebase mistake notebook
         if (wrongAnswers.length > 0) {
-          const wrongRecords = wrongAnswers.map(wa => {
+          const mistakeRecords = wrongAnswers.map(wa => {
             const question = questions[wa.questionIndex];
             return {
-              user_id: user!.id,
-              performance_id: perfData.id,
-              question_text: question?.question || `Question ${wa.questionIndex + 1}`,
+              questionId: `q_${wa.questionIndex}`,
+              questionText: question?.question || `Question ${wa.questionIndex + 1}`,
               options: question?.options || [],
-              selected_answer: question?.options?.[wa.selectedOption] || String(wa.selectedOption),
-              correct_answer: question?.options?.[wa.correctAnswer] || String(wa.correctAnswer),
+              selected: question?.options?.[wa.selectedOption] || String(wa.selectedOption),
+              correct: question?.options?.[wa.correctAnswer] || String(wa.correctAnswer),
               subject: 'Science',
-              mode: mode // Track test vs practice mistakes separately
+              source: 'test' as const,
             };
           });
-
-          await supabase.from('mcq_wrong_answers').insert(wrongRecords);
+          await saveMistakes(user!.id, mistakeRecords);
         }
 
-        // Record attempt and update stats based on mode
-        if (mode === 'test' && dailyTestId) {
-          await recordTestAttempt(dailyTestId, perfData.id);
-          // Update XP and streak ONLY for test
-          await updateStats(calculatedXp);
-          
-          // ✅ UPDATE FIREBASE LEADERBOARD (TEST ONLY)
-          console.log("📊 Updating Firebase leaderboard after test...");
-          const leaderboardSuccess = await updateLeaderboardForTest(
-            correctCount,
-            wrongCount,
-            totalQuestions
-          );
-          console.log("LEADERBOARD WRITE RESULT", {
-            uid: user?.id,
-            coachingId,
-            success: leaderboardSuccess,
+        // Update XP, streak, and leaderboard for TEST ONLY
+        await recordTestAttempt(dailyTestId!, testId);
+        await updateStats(calculatedXp);
+        
+        console.log("📊 Updating Firebase leaderboard after test...");
+        const leaderboardSuccess = await updateLeaderboardForTest(
+          correctCount,
+          wrongCount,
+          totalQuestions
+        );
+        console.log("LEADERBOARD WRITE RESULT", {
+          uid: user?.id,
+          coachingId,
+          success: leaderboardSuccess,
+        });
+      } else {
+        // Practice mode - save to Firebase without XP/leaderboard
+        await savePracticeResult(user!.id, {
+          setId: `practice_${practiceSetNumber}_${Date.now()}`,
+          correct: correctCount,
+          wrong: wrongCount,
+          score: scorePercentage,
+        });
+        console.log('✅ FIREBASE: Saved practice result');
+
+        // Save wrong answers to Firebase mistake notebook (practice)
+        if (wrongAnswers.length > 0) {
+          const mistakeRecords = wrongAnswers.map(wa => {
+            const question = questions[wa.questionIndex];
+            return {
+              questionId: `q_${wa.questionIndex}`,
+              questionText: question?.question || `Question ${wa.questionIndex + 1}`,
+              options: question?.options || [],
+              selected: question?.options?.[wa.selectedOption] || String(wa.selectedOption),
+              correct: question?.options?.[wa.correctAnswer] || String(wa.correctAnswer),
+              subject: 'Science',
+              source: 'practice' as const,
+            };
           });
-        } else if (mode === 'practice' && practiceSetNumber > 0) {
-          await recordPracticeAttempt(practiceSetNumber, perfData.id);
-          // Practice: NO XP, NO streak update, NO leaderboard update
+          await saveMistakes(user!.id, mistakeRecords);
         }
+
+        await recordPracticeAttempt(practiceSetNumber, `practice_${practiceSetNumber}`);
+        // Practice: NO XP, NO streak update, NO leaderboard update
       }
 
       setXpEarned(calculatedXp);

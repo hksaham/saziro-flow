@@ -7,6 +7,7 @@ import {
 import { db } from '@/lib/firebase';
 import { supabase } from '@/integrations/supabase/client';
 import { seedMCQsToFirestore } from '@/lib/mcqSeeder';
+import { saveTestResult, savePracticeResult, saveMistakes, getUser } from '@/lib/firebaseService';
 import type { MCQQuestion, MCQState, MCQSet } from '@/types/mcq';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 
@@ -239,70 +240,58 @@ export const useMCQEngine = (
         return { success: false, xpEarned: 0 };
       }
 
-      // Get user's coaching ID
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('coaching_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // Get user's coaching ID from Firebase
+      const firebaseUser = await getUser(user.id);
+      const coachingId = firebaseUser?.coachingId;
 
-      console.log(`📊 Saving performance for user ${user.id}...`);
+      console.log(`📊 Saving performance for user ${user.id} to Firebase...`);
 
       const correctCount = answeredQuestions.filter(q => q.isCorrect).length;
       const wrongCount = answeredQuestions.filter(q => !q.isCorrect).length;
       const totalQuestions = answeredQuestions.length;
       const scorePercentage = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
-      const xpEarned = correctCount * 10;
+      const xpEarned = mode === 'test' ? (correctCount * 10) - (wrongCount * 5) : 0;
+      const safeXp = Math.max(0, xpEarned);
 
-      // Insert performance record
-      const { data: perfData, error: perfError } = await supabase
-        .from('mcq_performance')
-        .insert({
-          user_id: user.id,
-          coaching_id: profile?.coaching_id,
-          mode,
-          total_questions: totalQuestions,
-          correct_answers: correctCount,
-          wrong_answers: wrongCount,
-          score_percentage: scorePercentage,
-          time_taken_seconds: timeTakenSeconds,
-          xp_earned: xpEarned
-        })
-        .select()
-        .single();
-
-      if (perfError) {
-        console.error('❌ Error saving performance:', perfError);
-        return { success: false, xpEarned: 0 };
+      // Save to Firebase based on mode
+      if (mode === 'test') {
+        await saveTestResult(user.id, {
+          setId: setId || `test_${Date.now()}`,
+          coachingId: coachingId || '',
+          correct: correctCount,
+          wrong: wrongCount,
+          score: scorePercentage,
+          timeTakenSeconds,
+        });
+        console.log(`✅ FIREBASE: Test performance saved: ${correctCount}/${totalQuestions} correct, ${safeXp} XP earned`);
+      } else {
+        await savePracticeResult(user.id, {
+          setId: setId || `practice_${Date.now()}`,
+          correct: correctCount,
+          wrong: wrongCount,
+          score: scorePercentage,
+        });
+        console.log(`✅ FIREBASE: Practice performance saved: ${correctCount}/${totalQuestions} correct`);
       }
 
-      console.log(`✅ Performance saved: ${correctCount}/${totalQuestions} correct, ${xpEarned} XP earned`);
-
-      // Save wrong answers for mistake notebook
+      // Save wrong answers to Firebase mistake notebook
       const wrongAnswers = answeredQuestions.filter(q => !q.isCorrect);
-      if (wrongAnswers.length > 0 && perfData) {
-        const wrongAnswerRecords = wrongAnswers.map(wa => {
+      if (wrongAnswers.length > 0) {
+        const mistakeRecords = wrongAnswers.map(wa => {
           const question = state.questions[wa.questionIndex];
           return {
-            user_id: user.id,
-            performance_id: perfData.id,
-            question_text: question?.question || `Question ${wa.questionIndex + 1}`,
+            questionId: `q_${wa.questionIndex}`,
+            questionText: question?.question || `Question ${wa.questionIndex + 1}`,
             options: question?.options || [],
-            selected_answer: question?.options?.[wa.selectedOption] || String(wa.selectedOption),
-            correct_answer: question?.options?.[wa.correctAnswer] || String(wa.correctAnswer),
-            subject: meta?.subject || 'Unknown'
+            selected: question?.options?.[wa.selectedOption] || String(wa.selectedOption),
+            correct: question?.options?.[wa.correctAnswer] || String(wa.correctAnswer),
+            subject: meta?.subject || 'Unknown',
+            source: mode as 'test' | 'practice',
           };
         });
 
-        const { error: wrongError } = await supabase
-          .from('mcq_wrong_answers')
-          .insert(wrongAnswerRecords);
-
-        if (wrongError) {
-          console.error('❌ Error saving wrong answers:', wrongError);
-        } else {
-          console.log(`📝 Saved ${wrongAnswers.length} wrong answers to mistake notebook`);
-        }
+        await saveMistakes(user.id, mistakeRecords);
+        console.log(`📝 FIREBASE: Saved ${wrongAnswers.length} wrong answers to mistake notebook`);
       }
 
       // ✅ UPDATE LEADERBOARD FOR TEST MODE ONLY
@@ -313,7 +302,7 @@ export const useMCQEngine = (
         console.log('⏭️ Skipping leaderboard update for PRACTICE mode');
       }
 
-      return { success: true, xpEarned };
+      return { success: true, xpEarned: safeXp };
     } catch (err: any) {
       console.error('❌ Error saving performance:', {
         message: err?.message,

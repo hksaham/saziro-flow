@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTone } from '@/contexts/ToneContext';
-import { supabase } from '@/integrations/supabase/client';
+import { getMistakes, MistakeEntry } from '@/lib/firebaseService';
 import Logo from '@/components/ui/Logo';
 import { 
   ArrowLeft, 
@@ -55,31 +55,23 @@ const MistakeNotebook = () => {
     setError(null);
 
     try {
-      // Get date 30 days ago
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const dateFilter = thirtyDaysAgo.toISOString();
+      console.log('🔥 FIREBASE: Fetching mistakes for user', user.id);
+      
+      // Fetch from Firebase
+      const firebaseMistakes = await getMistakes(user.id, 100);
 
-      const { data, error: fetchError } = await supabase
-        .from('mcq_wrong_answers')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', dateFilter)
-        .order('created_at', { ascending: false });
-
-      if (fetchError) {
-        console.error('Error fetching mistakes:', fetchError);
-        setError('Failed to load mistakes. Please try again.');
-        return;
-      }
-
-      // Transform data to ensure options is string[]
-      const transformedData: WrongAnswer[] = (data || []).map(item => ({
-        ...item,
-        options: Array.isArray(item.options) ? item.options as string[] : [],
-        subject: item.subject || null
+      // Transform Firebase data to match UI format
+      const transformedData: WrongAnswer[] = firebaseMistakes.map((item: MistakeEntry & { id?: string }) => ({
+        id: item.id || `mistake_${Date.now()}`,
+        question_text: item.questionText,
+        options: item.options,
+        selected_answer: item.selected,
+        correct_answer: item.correct,
+        subject: item.subject || null,
+        created_at: item.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       }));
 
+      console.log(`✅ FIREBASE: Loaded ${transformedData.length} mistakes`);
       setMistakes(transformedData);
     } catch (err) {
       console.error('Fetch error:', err);

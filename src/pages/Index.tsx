@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Logo from '@/components/ui/Logo';
-import ToneSelector from '@/components/ui/ToneSelector';
 import { useTone } from '@/contexts/ToneContext';
 import { ArrowRight, BookOpen, Users, Zap, Shield, GraduationCap, CheckCircle2 } from 'lucide-react';
 
@@ -45,16 +44,13 @@ const Index = () => {
       <header className="border-b border-border/50 bg-background/80 backdrop-blur-lg sticky top-0 z-50">
         <div className="container flex justify-between items-center h-16 px-6">
           <Logo size="sm" />
-          <div className="flex items-center gap-4">
-            <ToneSelector />
-            <Link
-              to={getDashboardLink()}
-              className="btn-primary flex items-center gap-2"
-            >
-              {user ? t.dashboard : t.login}
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
+          <Link
+            to={getDashboardLink()}
+            className="btn-primary flex items-center gap-2"
+          >
+            {user ? t.dashboard : t.login}
+            <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       </header>
 

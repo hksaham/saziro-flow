@@ -155,6 +155,7 @@ export const useLeaderboard = () => {
   }, [user, coachingId, fetchLiveLeaderboard]);
 
   // Update LIVE leaderboard after TEST submission (NOT practice)
+  // IMPORTANT: Only UPDATE existing entries - entries are created at approval time
   const updateLeaderboardForTest = useCallback(async (
     correctAnswers: number,
     wrongAnswers: number,
@@ -170,14 +171,11 @@ export const useLeaderboard = () => {
     
     // Calculate XP: +10 per correct, -5 per wrong
     const xpChange = (correctAnswers * 10) - (wrongAnswers * 5);
-    const accuracy = totalQuestions > 0 
-      ? Number(((correctAnswers / totalQuestions) * 100).toFixed(2))
-      : 0;
 
     console.log(`📊 Updating leaderboard: +${correctAnswers * 10} - ${wrongAnswers * 5} = ${xpChange} XP`);
 
     try {
-      // Update LIVE leaderboard (cumulative, never resets)
+      // Update LIVE leaderboard (entry MUST exist - created at approval time)
       const { data: existingLive } = await supabase
         .from('live_leaderboard')
         .select('*')
@@ -207,24 +205,11 @@ export const useLeaderboard = () => {
           })
           .eq('id', existingLive.id);
       } else {
-        await supabase
-          .from('live_leaderboard')
-          .insert({
-            coaching_id: coachingId,
-            user_id: user.id,
-            full_name: profile.full_name,
-            student_class: profile.student_class,
-            board: profile.board,
-            total_xp: Math.max(0, xpChange),
-            correct_answers: correctAnswers,
-            wrong_answers: wrongAnswers,
-            accuracy,
-            tests_taken: 1,
-            last_test_at: new Date().toISOString()
-          });
+        // Entry doesn't exist - this shouldn't happen, but log warning
+        console.warn('⚠️ LIVE leaderboard entry not found for user - should have been created at approval');
       }
 
-      // Update weekly leaderboard
+      // Update weekly leaderboard (creates per-week entries as needed)
       const { data: existingWeekly } = await supabase
         .from('weekly_leaderboard')
         .select('*')
@@ -254,6 +239,7 @@ export const useLeaderboard = () => {
           })
           .eq('id', existingWeekly.id);
       } else {
+        // Weekly entries are per-week, so we can create them
         await supabase
           .from('weekly_leaderboard')
           .insert({
@@ -266,12 +252,14 @@ export const useLeaderboard = () => {
             total_xp: Math.max(0, xpChange),
             correct_answers: correctAnswers,
             wrong_answers: wrongAnswers,
-            accuracy,
+            accuracy: totalQuestions > 0 
+              ? Number(((correctAnswers / totalQuestions) * 100).toFixed(2))
+              : 0,
             tests_taken: 1
           });
       }
 
-      // Update monthly leaderboard
+      // Update monthly leaderboard (creates per-month entries as needed)
       const { data: existingMonthly } = await supabase
         .from('monthly_leaderboard')
         .select('*')
@@ -301,6 +289,7 @@ export const useLeaderboard = () => {
           })
           .eq('id', existingMonthly.id);
       } else {
+        // Monthly entries are per-month, so we can create them
         await supabase
           .from('monthly_leaderboard')
           .insert({
@@ -313,7 +302,9 @@ export const useLeaderboard = () => {
             total_xp: Math.max(0, xpChange),
             correct_answers: correctAnswers,
             wrong_answers: wrongAnswers,
-            accuracy,
+            accuracy: totalQuestions > 0 
+              ? Number(((correctAnswers / totalQuestions) * 100).toFixed(2))
+              : 0,
             tests_taken: 1
           });
       }

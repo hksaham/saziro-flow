@@ -46,7 +46,7 @@ const Index = () => {
           <Logo size="sm" />
           <Link
             to={getDashboardLink()}
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-1.5 text-sm px-4 py-2 md:text-base md:px-6 md:py-3 md:gap-2"
           >
             {user ? t.dashboard : t.login}
             <ArrowRight className="w-4 h-4" />

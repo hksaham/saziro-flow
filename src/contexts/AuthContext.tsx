@@ -6,23 +6,19 @@ import {
   createUser,
   updateUser,
   getCoachingByInviteToken,
-  createCoaching,
   FirebaseUser,
 } from '@/lib/firebaseService';
-
-type UserRole = 'teacher' | 'student' | null;
-type StudentStatus = 'pending' | 'active' | 'rejected' | null;
 
 interface Profile {
   id: string;
   user_id: string;
   full_name: string;
-  role: UserRole;
   coaching_id: string | null;
-  student_status: StudentStatus;
   student_class: string | null;
   board: string | null;
   tone: string | null;
+  xp: number;
+  streak: number;
 }
 
 interface AuthContextType {
@@ -30,13 +26,9 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  isTeacher: boolean;
-  isStudent: boolean;
-  isApproved: boolean;
-  isPending: boolean;
   isOnboarded: boolean;
   coachingId: string | null;
-  signUp: (email: string, password: string, fullName: string, role: 'teacher' | 'student', coachingName?: string, inviteToken?: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, fullName: string, inviteToken: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -44,17 +36,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Convert Firebase user to Profile format
 const firebaseUserToProfile = (fbUser: FirebaseUser): Profile => ({
   id: fbUser.uid,
   user_id: fbUser.uid,
   full_name: fbUser.name,
-  role: fbUser.role as UserRole,
   coaching_id: fbUser.coachingId,
-  student_status: fbUser.status as StudentStatus,
   student_class: fbUser.class || null,
   board: fbUser.board || null,
   tone: fbUser.tone || null,
+  xp: fbUser.xp || 0,
+  streak: fbUser.streak || 0,
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -63,18 +54,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch profile from Firebase Firestore
   const fetchProfile = async (userId: string): Promise<Profile | null> => {
     try {
-      console.log('🔥 FIREBASE: Fetching user profile', userId);
       const fbUser = await getUser(userId);
-      
       if (fbUser) {
-        console.log('✅ FIREBASE: User found', fbUser.name);
         return firebaseUserToProfile(fbUser);
       }
-      
-      console.log('⚠️ FIREBASE: User not found in Firestore', userId);
       return null;
     } catch (err) {
       console.error('❌ FIREBASE: Profile fetch error:', err);
@@ -90,14 +75,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
 
         if (currentSession?.user) {
-          // Use setTimeout to prevent race conditions
           setTimeout(async () => {
             const profileData = await fetchProfile(currentSession.user.id);
             setProfile(profileData);
@@ -110,7 +93,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
       if (existingSession?.user) {
         setSession(existingSession);
@@ -131,12 +113,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     email: string,
     password: string,
     fullName: string,
-    role: 'teacher' | 'student',
-    coachingName?: string,
-    inviteToken?: string
+    inviteToken: string
   ): Promise<{ error: string | null }> => {
     try {
-      // Sign up the user via Lovable Auth (identity only)
+      // Validate invite token first
+      const coaching = await getCoachingByInviteToken(inviteToken);
+      if (!coaching) {
+        return { error: 'Invalid invite token' };
+      }
+
+      // Sign up via Supabase Auth (identity only)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -153,30 +139,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: 'Failed to create user' };
       }
 
-      let coachingId: string | null = null;
-
-      if (role === 'teacher' && coachingName) {
-        // Create coaching in Firebase
-        coachingId = await createCoaching(authData.user.id, coachingName);
-      } else if (role === 'student' && inviteToken) {
-        // Find coaching by invite token in Firebase
-        const coaching = await getCoachingByInviteToken(inviteToken);
-        if (!coaching) {
-          return { error: 'Invalid invite token' };
-        }
-        coachingId = coaching.coachingId;
-      }
-
-      // Create user profile in Firebase Firestore
+      // Auto-create user + leaderboard + stats in Firebase (single batch)
       await createUser(authData.user.id, {
-        role,
         name: fullName,
         email,
-        coachingId,
-        status: role === 'student' ? 'pending' : 'active',
+        coachingId: coaching.coachingId,
       });
 
-      console.log('✅ FIREBASE: User created successfully', authData.user.id);
+      console.log('✅ User created with auto-leaderboard entry:', authData.user.id);
       return { error: null };
     } catch (err) {
       console.error('Signup error:', err);
@@ -186,15 +156,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         return { error: error.message };
       }
-
       return { error: null };
     } catch (err) {
       console.error('Signin error:', err);
@@ -209,11 +174,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setProfile(null);
   };
 
-  const isTeacher = profile?.role === 'teacher';
-  const isStudent = profile?.role === 'student';
-  const isApproved = isTeacher || (isStudent && profile?.student_status === 'active');
-  const isPending = isStudent && profile?.student_status === 'pending';
-  const isOnboarded = isTeacher || (isStudent && !!profile?.student_class && !!profile?.board && !!profile?.tone);
+  const isOnboarded = !!profile?.student_class && !!profile?.board && !!profile?.tone;
   const coachingId = profile?.coaching_id ?? null;
 
   return (
@@ -223,10 +184,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         session,
         profile,
         loading,
-        isTeacher,
-        isStudent,
-        isApproved,
-        isPending,
         isOnboarded,
         coachingId,
         signUp,

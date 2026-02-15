@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { updateUser, getUser } from '@/lib/firebaseService';
 import { supabase } from '@/integrations/supabase/client';
-import { updateUser } from '@/lib/firebaseService';
 
 export type ToneType = 'chill-bro' | 'friendly-banglish' | 'formal-bangla';
 
@@ -223,19 +223,14 @@ const ToneContext = createContext<ToneContextType | undefined>(undefined);
 export const ToneProvider = ({ children }: { children: ReactNode }) => {
   const [tone, setToneState] = useState<ToneType>('chill-bro');
 
-  // Sync tone from profile on mount
+  // Sync tone from Firebase on mount
   useEffect(() => {
     const fetchProfileTone = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('tone')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        
-        if (profile?.tone && ['chill-bro', 'friendly-banglish', 'formal-bangla'].includes(profile.tone)) {
-          setToneState(profile.tone as ToneType);
+        const fbUser = await getUser(user.id);
+        if (fbUser?.tone && ['chill-bro', 'friendly-banglish', 'formal-bangla'].includes(fbUser.tone)) {
+          setToneState(fbUser.tone as ToneType);
         }
       }
     };

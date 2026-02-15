@@ -5,7 +5,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client'; // Auth only
 import { seedMCQsToFirestore } from '@/lib/mcqSeeder';
 import { saveTestResult, savePracticeResult, saveMistakes, getUser } from '@/lib/firebaseService';
 import type { MCQQuestion, MCQState, MCQSet } from '@/types/mcq';
@@ -226,7 +226,7 @@ export const useMCQEngine = (
     }));
   }, []);
 
-  // FIXED: Save performance to Supabase (with mistake tracking)
+  // Save performance to Firebase (with mistake tracking)
   const savePerformance = useCallback(async (
     answeredQuestions: AnsweredQuestion[],
     mode: 'test' | 'practice',

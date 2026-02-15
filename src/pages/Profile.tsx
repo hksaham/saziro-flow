@@ -4,7 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTone, ToneType } from '@/contexts/ToneContext';
 import { useUserStats } from '@/hooks/useUserStats';
 import { updateUser, getTodayPerformance } from '@/lib/firebaseService';
-import { supabase } from '@/integrations/supabase/client'; // Auth only - for password reset
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { firebaseAuth } from '@/lib/firebase';
 import { 
   ArrowLeft, User, Calendar, Star, Flame, Target, TrendingUp, TrendingDown,
   Zap, Settings, Languages, Edit3, KeyRound, LogOut, Save, X, Check
@@ -47,7 +48,7 @@ const Profile = () => {
     const fetchMetrics = async () => {
       if (!user) return;
       try {
-        const todayPerf = await getTodayPerformance(user.id);
+        const todayPerf = await getTodayPerformance(user.uid);
         setPerformanceMetrics({
           totalMcqsAttempted: todayPerf.testTotal + todayPerf.practiceTotal,
           overallAccuracy: todayPerf.testAccuracy,
@@ -75,7 +76,7 @@ const Profile = () => {
     if (!user || !editedName.trim()) return;
     setSavingName(true);
     try {
-      await updateUser(user.id, { name: editedName.trim() });
+      await updateUser(user.uid, { name: editedName.trim() });
       await refreshProfile();
       setIsEditingName(false);
       toast.success('Name updated successfully!');
@@ -89,10 +90,7 @@ const Profile = () => {
   const handleResetPassword = async () => {
     if (!user?.email) return;
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/login`,
-      });
-      if (error) throw error;
+      await sendPasswordResetEmail(firebaseAuth, user.email);
       toast.success('Password reset email sent! Check your inbox.');
     } catch (err) {
       toast.error('Failed to send reset email');
@@ -176,7 +174,7 @@ const Profile = () => {
                 )}
                 <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
-                  {formatDate(user?.created_at)}
+                  {formatDate(user?.metadata?.creationTime)}
                 </span>
               </div>
             </div>

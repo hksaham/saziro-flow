@@ -3,34 +3,36 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateUser } from '@/lib/firebaseService';
 import Logo from '@/components/ui/Logo';
-import { Loader2, GraduationCap, MapPin, MessageCircle, ArrowRight, CheckCircle } from 'lucide-react';
+import { Loader2, GraduationCap, MapPin, MessageCircle, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
 
-type StudentClass = 'class-9' | 'class-10' | 'old-10';
-type Board = 'dhaka' | 'chattogram' | 'rajshahi' | 'cumilla' | 'jessore' | 'sylhet' | 'dinajpur' | 'madrasah' | 'technical';
+type StudentClass = '6' | '7' | '8' | '9' | '10';
+type Board = 'dhaka' | 'rajshahi' | 'cumilla' | 'jessore' | 'chittagong' | 'barisal' | 'sylhet' | 'dinajpur' | 'mymensingh';
 type Tone = 'chill-bro' | 'friendly-banglish' | 'formal-bangla';
 
-const CLASS_OPTIONS: { value: StudentClass; label: string; labelBn: string }[] = [
-  { value: 'class-9', label: 'Class 9', labelBn: 'নবম শ্রেণী' },
-  { value: 'class-10', label: 'Class 10', labelBn: 'দশম শ্রেণী' },
-  { value: 'old-10', label: 'Old Class 10', labelBn: 'পুরাতন দশম' },
+const classOptions = [
+  { value: '6', label: 'Class 6' },
+  { value: '7', label: 'Class 7' },
+  { value: '8', label: 'Class 8' },
+  { value: '9', label: 'Class 9' },
+  { value: '10', label: 'Class 10' },
 ];
 
-const BOARD_OPTIONS: { value: Board; label: string; labelBn: string }[] = [
-  { value: 'dhaka', label: 'Dhaka', labelBn: 'ঢাকা' },
-  { value: 'chattogram', label: 'Chattogram', labelBn: 'চট্টগ্রাম' },
-  { value: 'rajshahi', label: 'Rajshahi', labelBn: 'রাজশাহী' },
-  { value: 'cumilla', label: 'Cumilla', labelBn: 'কুমিল্লা' },
-  { value: 'jessore', label: 'Jessore', labelBn: 'যশোর' },
-  { value: 'sylhet', label: 'Sylhet', labelBn: 'সিলেট' },
-  { value: 'dinajpur', label: 'Dinajpur', labelBn: 'দিনাজপুর' },
-  { value: 'madrasah', label: 'Madrasah', labelBn: 'মাদ্রাসা' },
-  { value: 'technical', label: 'Technical', labelBn: 'কারিগরি' },
+const boardOptions = [
+  { value: 'dhaka', label: 'Dhaka' },
+  { value: 'rajshahi', label: 'Rajshahi' },
+  { value: 'cumilla', label: 'Cumilla' },
+  { value: 'jessore', label: 'Jessore' },
+  { value: 'chittagong', label: 'Chittagong' },
+  { value: 'barisal', label: 'Barisal' },
+  { value: 'sylhet', label: 'Sylhet' },
+  { value: 'dinajpur', label: 'Dinajpur' },
+  { value: 'mymensingh', label: 'Mymensingh' },
 ];
 
-const TONE_OPTIONS: { value: Tone; label: string; description: string; emoji: string }[] = [
-  { value: 'chill-bro', label: 'Chill Bro', description: 'Casual & fun Banglish vibes 😎', emoji: '🔥' },
-  { value: 'friendly-banglish', label: 'Friendly Banglish', description: 'Friendly mix of Bangla & English 🙂', emoji: '✨' },
-  { value: 'formal-bangla', label: 'Formal Bangla', description: 'শুদ্ধ বাংলায় 📚', emoji: '📖' },
+const toneOptions = [
+  { value: 'chill-bro', label: 'Chill Bro' },
+  { value: 'friendly-banglish', label: 'Friendly Banglish' },
+  { value: 'formal-bangla', label: 'Formal Bangla' },
 ];
 
 const StudentOnboarding = () => {
@@ -56,7 +58,6 @@ const StudentOnboarding = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // If already onboarded, go to dashboard
   if (profile?.student_class && profile?.board && profile?.tone) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -70,13 +71,12 @@ const StudentOnboarding = () => {
     setError('');
 
     try {
-      await updateUser(user.id, {
+      await updateUser(user.uid, {
         class: studentClass,
         board: board,
         tone: tone,
       });
 
-      // Also update leaderboard entry with class/board
       await refreshProfile();
       navigate('/dashboard', { replace: true });
     } catch (err) {
@@ -87,182 +87,120 @@ const StudentOnboarding = () => {
     }
   };
 
-  const nextStep = () => {
-    if (step === 1 && studentClass) setStep(2);
-    else if (step === 2 && board) setStep(3);
-  };
-
-  const prevStep = () => {
-    if (step > 1) setStep(step - 1);
-  };
+  const nextStep = () => setStep(step + 1);
+  const prevStep = () => setStep(step - 1);
 
   return (
-    <div className="min-h-screen bg-background bg-pattern flex flex-col">
-      <div className="p-6">
-        <Logo size="sm" />
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-background bg-pattern">
+      <div className="w-full max-w-md p-6 rounded-lg shadow-md bg-card animate-scale-in">
+        <div className="text-center mb-8">
+          <Logo size="md" />
+          <h2 className="text-3xl font-display font-bold text-foreground mt-4">Welcome!</h2>
+          <p className="text-muted-foreground mt-2">Tell us a bit about yourself to get started.</p>
+        </div>
 
-      <div className="flex-1 flex items-center justify-center px-4 pb-12">
-        <div className="w-full max-w-lg animate-fade-in">
-          {/* Progress Indicator */}
-          <div className="flex items-center justify-center gap-2 mb-8">
-            {[1, 2, 3].map((s) => (
-              <div
-                key={s}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  s === step ? 'w-8 bg-primary' : s < step ? 'w-6 bg-primary/50' : 'w-6 bg-muted'
-                }`}
-              />
-            ))}
+        {error && (
+          <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm animate-scale-in mb-4">
+            {error}
           </div>
+        )}
 
-          {/* Step 1: Class Selection */}
-          {step === 1 && (
-            <div className="animate-scale-in">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <GraduationCap className="w-8 h-8 text-primary" />
-                </div>
-                <h1 className="text-2xl font-display font-bold text-foreground">Which class are you in?</h1>
-                <p className="text-muted-foreground mt-2">তোমার ক্লাস সিলেক্ট করো</p>
-              </div>
-
-              <div className="space-y-3">
-                {CLASS_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => setStudentClass(option.value)}
-                    className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${
-                      studentClass === option.value
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50 bg-card'
-                    }`}
-                  >
-                    <div className="text-left">
-                      <p className="font-semibold text-foreground">{option.label}</p>
-                      <p className="text-sm text-muted-foreground">{option.labelBn}</p>
-                    </div>
-                    {studentClass === option.value && <CheckCircle className="w-6 h-6 text-primary" />}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={nextStep}
-                disabled={!studentClass}
-                className="w-full btn-primary mt-8 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Continue
-                <ArrowRight className="w-5 h-5" />
+        {step === 1 && (
+          <div className="space-y-4 animate-fade-in">
+            <h3 className="text-lg font-semibold text-foreground">
+              <GraduationCap className="mr-2 inline-block w-5 h-5" />
+              What class are you in?
+            </h3>
+            <div className="grid grid-cols-3 gap-3">
+              {classOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setStudentClass(option.value as StudentClass)}
+                  className={`btn-secondary ${studentClass === option.value ? 'bg-primary text-primary-foreground' : ''}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <button onClick={nextStep} disabled={!studentClass} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
+                Next <ArrowRight className="ml-2 w-4 h-4" />
               </button>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Step 2: Board Selection */}
-          {step === 2 && (
-            <div className="animate-scale-in">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <MapPin className="w-8 h-8 text-primary" />
-                </div>
-                <h1 className="text-2xl font-display font-bold text-foreground">Select your Board</h1>
-                <p className="text-muted-foreground mt-2">তোমার বোর্ড সিলেক্ট করো</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {BOARD_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => setBoard(option.value)}
-                    className={`p-4 rounded-xl border-2 transition-all text-left ${
-                      board === option.value
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50 bg-card'
-                    }`}
-                  >
-                    <p className="font-semibold text-foreground">{option.label}</p>
-                    <p className="text-sm text-muted-foreground">{option.labelBn}</p>
-                    {board === option.value && <CheckCircle className="w-5 h-5 text-primary mt-2" />}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex gap-3 mt-8">
-                <button onClick={prevStep} className="flex-1 btn-secondary">Back</button>
+        {step === 2 && (
+          <div className="space-y-4 animate-fade-in">
+            <h3 className="text-lg font-semibold text-foreground">
+              <MapPin className="mr-2 inline-block w-5 h-5" />
+              Which education board are you under?
+            </h3>
+            <div className="grid grid-cols-3 gap-3">
+              {boardOptions.map((option) => (
                 <button
-                  onClick={nextStep}
-                  disabled={!board}
-                  className="flex-1 btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  key={option.value}
+                  onClick={() => setBoard(option.value as Board)}
+                  className={`btn-secondary ${board === option.value ? 'bg-primary text-primary-foreground' : ''}`}
                 >
-                  Continue
-                  <ArrowRight className="w-5 h-5" />
+                  {option.label}
                 </button>
-              </div>
+              ))}
             </div>
-          )}
+            <div className="flex justify-between">
+              <button onClick={prevStep} className="btn-ghost">
+                <ArrowLeft className="mr-2 w-4 h-4" /> Back
+              </button>
+              <button onClick={nextStep} disabled={!board} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
+                Next <ArrowRight className="ml-2 w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
-          {/* Step 3: Tone Selection */}
-          {step === 3 && (
-            <div className="animate-scale-in">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <MessageCircle className="w-8 h-8 text-primary" />
-                </div>
-                <h1 className="text-2xl font-display font-bold text-foreground">Choose your vibe</h1>
-                <p className="text-muted-foreground mt-2">কিভাবে কথা বলব তোমার সাথে?</p>
-              </div>
-
-              <div className="space-y-3">
-                {TONE_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => setTone(option.value)}
-                    className={`w-full p-4 rounded-xl border-2 transition-all flex items-center gap-4 ${
-                      tone === option.value
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50 bg-card'
-                    }`}
-                  >
-                    <span className="text-2xl">{option.emoji}</span>
-                    <div className="text-left flex-1">
-                      <p className="font-semibold text-foreground">{option.label}</p>
-                      <p className="text-sm text-muted-foreground">{option.description}</p>
-                    </div>
-                    {tone === option.value && <CheckCircle className="w-6 h-6 text-primary" />}
-                  </button>
-                ))}
-              </div>
-
-              {error && (
-                <div className="mt-4 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-                  {error}
-                </div>
-              )}
-
-              <div className="flex gap-3 mt-8">
-                <button onClick={prevStep} className="flex-1 btn-secondary" disabled={isSubmitting}>Back</button>
+        {step === 3 && (
+          <div className="space-y-4 animate-fade-in">
+            <h3 className="text-lg font-semibold text-foreground">
+              <MessageCircle className="mr-2 inline-block w-5 h-5" />
+              Choose your preferred tone:
+            </h3>
+            <div className="grid grid-cols-3 gap-3">
+              {toneOptions.map((option) => (
                 <button
-                  onClick={handleSubmit}
-                  disabled={!isFormValid || isSubmitting}
-                  className="flex-1 btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  key={option.value}
+                  onClick={() => setTone(option.value as Tone)}
+                  className={`btn-secondary ${tone === option.value ? 'bg-primary text-primary-foreground' : ''}`}
                 >
-                  {isSubmitting ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      Let's Go!
-                      <ArrowRight className="w-5 h-5" />
-                    </>
-                  )}
+                  {option.label}
                 </button>
-              </div>
+              ))}
             </div>
-          )}
+            <div className="flex justify-between">
+              <button onClick={prevStep} className="btn-ghost">
+                <ArrowLeft className="mr-2 w-4 h-4" /> Back
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !tone}
+                className="btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>Submitting...<Loader2 className="w-4 h-4 animate-spin" /></>
+                ) : (
+                  <>Finish<ArrowRight className="ml-2 w-4 h-4" /></>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
 
-          <p className="text-center text-xs text-muted-foreground mt-8 opacity-60">
-            Anti-cheat system is active. Suspicious activity may reset streaks and XP.
-          </p>
-        </div>
+        {step === 4 && (
+          <div className="text-center animate-fade-in">
+            <CheckCircle className="w-16 h-16 text-primary mx-auto mb-4" />
+            <h3 className="text-2xl font-semibold text-foreground">All done!</h3>
+            <p className="text-muted-foreground mt-2">You're all set. Redirecting to your dashboard...</p>
+          </div>
+        )}
       </div>
     </div>
   );

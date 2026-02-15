@@ -34,7 +34,7 @@ const TONE_OPTIONS: { value: Tone; label: string; description: string; emoji: st
 ];
 
 const StudentOnboarding = () => {
-  const { user, profile, loading, refreshProfile, isStudent } = useAuth();
+  const { user, profile, loading, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const [studentClass, setStudentClass] = useState<StudentClass | null>(null);
@@ -44,7 +44,6 @@ const StudentOnboarding = () => {
   const [error, setError] = useState('');
   const [step, setStep] = useState(1);
 
-  // If loading, show spinner
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background bg-pattern">
@@ -53,21 +52,12 @@ const StudentOnboarding = () => {
     );
   }
 
-  // If not authenticated, redirect to login
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // If not a student, redirect to dashboard
-  if (profile && !isStudent) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  // If already onboarded (has class, board, tone), redirect to appropriate page
+  // If already onboarded, go to dashboard
   if (profile?.student_class && profile?.board && profile?.tone) {
-    if (profile.student_status === 'pending') {
-      return <Navigate to="/pending" replace />;
-    }
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -80,23 +70,15 @@ const StudentOnboarding = () => {
     setError('');
 
     try {
-      // Update profile in Firebase
       await updateUser(user.id, {
         class: studentClass,
         board: board,
         tone: tone,
       });
-      console.log('✅ FIREBASE: Onboarding profile updated');
 
-      // Refresh the profile to get updated data
+      // Also update leaderboard entry with class/board
       await refreshProfile();
-
-      // Navigate based on status
-      if (profile?.student_status === 'pending') {
-        navigate('/pending', { replace: true });
-      } else {
-        navigate('/dashboard', { replace: true });
-      }
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       console.error('Onboarding error:', err);
       setError('Something went wrong. Please try again.');
@@ -116,12 +98,10 @@ const StudentOnboarding = () => {
 
   return (
     <div className="min-h-screen bg-background bg-pattern flex flex-col">
-      {/* Header */}
       <div className="p-6">
         <Logo size="sm" />
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 flex items-center justify-center px-4 pb-12">
         <div className="w-full max-w-lg animate-fade-in">
           {/* Progress Indicator */}
@@ -130,11 +110,7 @@ const StudentOnboarding = () => {
               <div
                 key={s}
                 className={`h-2 rounded-full transition-all duration-300 ${
-                  s === step
-                    ? 'w-8 bg-primary'
-                    : s < step
-                    ? 'w-6 bg-primary/50'
-                    : 'w-6 bg-muted'
+                  s === step ? 'w-8 bg-primary' : s < step ? 'w-6 bg-primary/50' : 'w-6 bg-muted'
                 }`}
               />
             ))}
@@ -147,12 +123,8 @@ const StudentOnboarding = () => {
                 <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
                   <GraduationCap className="w-8 h-8 text-primary" />
                 </div>
-                <h1 className="text-2xl font-display font-bold text-foreground">
-                  Which class are you in?
-                </h1>
-                <p className="text-muted-foreground mt-2">
-                  তোমার ক্লাস সিলেক্ট করো
-                </p>
+                <h1 className="text-2xl font-display font-bold text-foreground">Which class are you in?</h1>
+                <p className="text-muted-foreground mt-2">তোমার ক্লাস সিলেক্ট করো</p>
               </div>
 
               <div className="space-y-3">
@@ -170,9 +142,7 @@ const StudentOnboarding = () => {
                       <p className="font-semibold text-foreground">{option.label}</p>
                       <p className="text-sm text-muted-foreground">{option.labelBn}</p>
                     </div>
-                    {studentClass === option.value && (
-                      <CheckCircle className="w-6 h-6 text-primary" />
-                    )}
+                    {studentClass === option.value && <CheckCircle className="w-6 h-6 text-primary" />}
                   </button>
                 ))}
               </div>
@@ -195,12 +165,8 @@ const StudentOnboarding = () => {
                 <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
                   <MapPin className="w-8 h-8 text-primary" />
                 </div>
-                <h1 className="text-2xl font-display font-bold text-foreground">
-                  Select your Board
-                </h1>
-                <p className="text-muted-foreground mt-2">
-                  তোমার বোর্ড সিলেক্ট করো
-                </p>
+                <h1 className="text-2xl font-display font-bold text-foreground">Select your Board</h1>
+                <p className="text-muted-foreground mt-2">তোমার বোর্ড সিলেক্ট করো</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -216,20 +182,13 @@ const StudentOnboarding = () => {
                   >
                     <p className="font-semibold text-foreground">{option.label}</p>
                     <p className="text-sm text-muted-foreground">{option.labelBn}</p>
-                    {board === option.value && (
-                      <CheckCircle className="w-5 h-5 text-primary mt-2" />
-                    )}
+                    {board === option.value && <CheckCircle className="w-5 h-5 text-primary mt-2" />}
                   </button>
                 ))}
               </div>
 
               <div className="flex gap-3 mt-8">
-                <button
-                  onClick={prevStep}
-                  className="flex-1 btn-secondary"
-                >
-                  Back
-                </button>
+                <button onClick={prevStep} className="flex-1 btn-secondary">Back</button>
                 <button
                   onClick={nextStep}
                   disabled={!board}
@@ -249,12 +208,8 @@ const StudentOnboarding = () => {
                 <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
                   <MessageCircle className="w-8 h-8 text-primary" />
                 </div>
-                <h1 className="text-2xl font-display font-bold text-foreground">
-                  Choose your vibe
-                </h1>
-                <p className="text-muted-foreground mt-2">
-                  কিভাবে কথা বলব তোমার সাথে?
-                </p>
+                <h1 className="text-2xl font-display font-bold text-foreground">Choose your vibe</h1>
+                <p className="text-muted-foreground mt-2">কিভাবে কথা বলব তোমার সাথে?</p>
               </div>
 
               <div className="space-y-3">
@@ -273,9 +228,7 @@ const StudentOnboarding = () => {
                       <p className="font-semibold text-foreground">{option.label}</p>
                       <p className="text-sm text-muted-foreground">{option.description}</p>
                     </div>
-                    {tone === option.value && (
-                      <CheckCircle className="w-6 h-6 text-primary" />
-                    )}
+                    {tone === option.value && <CheckCircle className="w-6 h-6 text-primary" />}
                   </button>
                 ))}
               </div>
@@ -287,13 +240,7 @@ const StudentOnboarding = () => {
               )}
 
               <div className="flex gap-3 mt-8">
-                <button
-                  onClick={prevStep}
-                  className="flex-1 btn-secondary"
-                  disabled={isSubmitting}
-                >
-                  Back
-                </button>
+                <button onClick={prevStep} className="flex-1 btn-secondary" disabled={isSubmitting}>Back</button>
                 <button
                   onClick={handleSubmit}
                   disabled={!isFormValid || isSubmitting}
@@ -312,7 +259,6 @@ const StudentOnboarding = () => {
             </div>
           )}
 
-          {/* Integrity Notice */}
           <p className="text-center text-xs text-muted-foreground mt-8 opacity-60">
             Anti-cheat system is active. Suspicious activity may reset streaks and XP.
           </p>

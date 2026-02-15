@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { User, Session } from '@supabase/supabase-js';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  User as FirebaseAuthUser,
+} from 'firebase/auth';
+import { firebaseAuth } from '@/lib/firebase';
 import {
   getUser,
   createUser,
@@ -22,8 +28,7 @@ interface Profile {
 }
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: FirebaseAuthUser | null;
   profile: Profile | null;
   loading: boolean;
   isOnboarded: boolean;
@@ -49,8 +54,7 @@ const firebaseUserToProfile = (fbUser: FirebaseUser): Profile => ({
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<FirebaseAuthUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -69,44 +73,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshProfile = async () => {
     if (user) {
-      const profileData = await fetchProfile(user.id);
+      const profileData = await fetchProfile(user.uid);
       setProfile(profileData);
     }
   };
 
+  // Firebase Auth state listener
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
+      setUser(firebaseUser);
 
-        if (currentSession?.user) {
-          setTimeout(async () => {
-            const profileData = await fetchProfile(currentSession.user.id);
-            setProfile(profileData);
-            setLoading(false);
-          }, 0);
-        } else {
-          setProfile(null);
-          setLoading(false);
-        }
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
-      if (existingSession?.user) {
-        setSession(existingSession);
-        setUser(existingSession.user);
-        fetchProfile(existingSession.user.id).then((profileData) => {
-          setProfile(profileData);
-          setLoading(false);
-        });
+      if (firebaseUser) {
+        const profileData = await fetchProfile(firebaseUser.uid);
+        setProfile(profileData);
       } else {
-        setLoading(false);
+        setProfile(null);
       }
+      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const signUp = async (
@@ -122,55 +108,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: 'Invalid invite token' };
       }
 
-      // Sign up via Supabase Auth (identity only)
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: window.location.origin,
-        },
-      });
+      // Create Firebase Auth account
+      const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      const uid = userCredential.user.uid;
 
-      if (authError) {
-        return { error: authError.message };
-      }
-
-      if (!authData.user) {
-        return { error: 'Failed to create user' };
-      }
-
-      // Auto-create user + leaderboard + stats in Firebase (single batch)
-      await createUser(authData.user.id, {
+      // Auto-create user + leaderboard + stats in Firestore (single batch)
+      await createUser(uid, {
         name: fullName,
         email,
         coachingId: coaching.coachingId,
       });
 
-      console.log('✅ User created with auto-leaderboard entry:', authData.user.id);
+      console.log('✅ Firebase Auth + Firestore user created:', uid);
       return { error: null };
-    } catch (err) {
+    } catch (err: any) {
       console.error('Signup error:', err);
-      return { error: 'An unexpected error occurred' };
+      if (err?.code === 'auth/email-already-in-use') {
+        return { error: 'This email is already registered. Please login instead.' };
+      }
+      if (err?.code === 'auth/weak-password') {
+        return { error: 'Password should be at least 6 characters.' };
+      }
+      return { error: err?.message || 'An unexpected error occurred' };
     }
   };
 
   const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        return { error: error.message };
-      }
+      await signInWithEmailAndPassword(firebaseAuth, email, password);
       return { error: null };
-    } catch (err) {
+    } catch (err: any) {
       console.error('Signin error:', err);
-      return { error: 'An unexpected error occurred' };
+      if (err?.code === 'auth/invalid-credential' || err?.code === 'auth/wrong-password' || err?.code === 'auth/user-not-found') {
+        return { error: 'Invalid email or password.' };
+      }
+      return { error: err?.message || 'An unexpected error occurred' };
     }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await firebaseSignOut(firebaseAuth);
     setUser(null);
-    setSession(null);
     setProfile(null);
   };
 
@@ -181,7 +159,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider
       value={{
         user,
-        session,
         profile,
         loading,
         isOnboarded,

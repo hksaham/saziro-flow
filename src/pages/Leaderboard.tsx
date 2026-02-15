@@ -279,7 +279,7 @@ const Leaderboard: React.FC = () => {
               <CardContent>
                 <LeaderboardTable
                   entries={live}
-                  currentUserId={user?.id}
+                  currentUserId={user?.uid}
                   loading={loading}
                   isLive
                 />
@@ -298,7 +298,7 @@ const Leaderboard: React.FC = () => {
               <CardContent>
                 <LeaderboardTable
                   entries={weekly}
-                  currentUserId={user?.id}
+                  currentUserId={user?.uid}
                   loading={loading}
                 />
               </CardContent>
@@ -316,7 +316,7 @@ const Leaderboard: React.FC = () => {
               <CardContent>
                 <LeaderboardTable
                   entries={monthly}
-                  currentUserId={user?.id}
+                  currentUserId={user?.uid}
                   loading={loading}
                 />
               </CardContent>

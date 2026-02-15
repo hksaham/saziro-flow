@@ -61,7 +61,7 @@ const toneTexts: Record<ToneType, ToneTexts> = {
     welcome: 'Yo! Study Buddy te Welcome! 🔥',
     pendingApproval: 'Bro, Wait Koro! ⏳',
     pendingDescription: 'Tomar teacher tomar request ta dekhe approve korbe. Chill koro, notification ashbe! 😎',
-    login: 'Login Kor Bro',
+    login: 'Do Login Bro',
     signup: 'Account Khol',
     teacher: 'Teacher',
     student: 'Student',

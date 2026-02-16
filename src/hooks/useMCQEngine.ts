@@ -6,9 +6,9 @@ import {
 } from 'firebase/firestore';
 import { db, firebaseAuth } from '@/lib/firebase';
 import { seedMCQsToFirestore } from '@/lib/mcqSeeder';
-import { saveTestResult, savePracticeResult, saveMistakes, getUser } from '@/lib/firebaseService';
+import { saveTestResultAtomic, savePracticeResult, saveMistakes, getUser } from '@/lib/firebaseService';
 import type { MCQQuestion, MCQState, MCQSet } from '@/types/mcq';
-import { useLeaderboard } from '@/hooks/useLeaderboard';
+
 
 interface AnsweredQuestion {
   questionIndex: number;
@@ -37,9 +37,7 @@ export const useMCQEngine = (
   const [meta, setMeta] = useState<MCQSet['meta'] | null>(null);
   const [setId, setSetId] = useState<string | null>(null);
   
-  // Use leaderboard hook for updating rankings after TEST submission
-  const { updateLeaderboardForTest } = useLeaderboard();
-
+  // Leaderboard update is now handled atomically inside saveTestResultAtomic
   // Fetch MCQs from mcq_sets collection (new structure)
   const fetchMCQsFromSets = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
@@ -254,7 +252,8 @@ export const useMCQEngine = (
 
       // Save to Firebase based on mode
       if (mode === 'test') {
-        await saveTestResult(fbUser.uid, {
+        // ATOMIC: saves result + updates leaderboard + updates stats in one batch
+        const atomicResult = await saveTestResultAtomic(fbUser.uid, {
           setId: setId || `test_${Date.now()}`,
           coachingId: coachingId || '',
           correct: correctCount,
@@ -262,7 +261,7 @@ export const useMCQEngine = (
           score: scorePercentage,
           timeTakenSeconds,
         });
-        console.log(`✅ FIREBASE: Test performance saved: ${correctCount}/${totalQuestions} correct, ${safeXp} XP earned`);
+        console.log(`✅ FIREBASE ATOMIC: Test saved: ${correctCount}/${totalQuestions} correct, ${atomicResult.xpEarned} XP earned`);
       } else {
         await savePracticeResult(fbUser.uid, {
           setId: setId || `practice_${Date.now()}`,
@@ -273,34 +272,6 @@ export const useMCQEngine = (
         console.log(`✅ FIREBASE: Practice performance saved: ${correctCount}/${totalQuestions} correct`);
       }
 
-      // Save wrong answers to Firebase mistake notebook
-      const wrongAnswers = answeredQuestions.filter(q => !q.isCorrect);
-      if (wrongAnswers.length > 0) {
-        const mistakeRecords = wrongAnswers.map(wa => {
-          const question = state.questions[wa.questionIndex];
-          return {
-            questionId: `q_${wa.questionIndex}`,
-            questionText: question?.question || `Question ${wa.questionIndex + 1}`,
-            options: question?.options || [],
-            selected: question?.options?.[wa.selectedOption] || String(wa.selectedOption),
-            correct: question?.options?.[wa.correctAnswer] || String(wa.correctAnswer),
-            subject: meta?.subject || 'Unknown',
-            source: mode as 'test' | 'practice',
-          };
-        });
-
-        await saveMistakes(fbUser.uid, mistakeRecords);
-        console.log(`📝 FIREBASE: Saved ${wrongAnswers.length} wrong answers to mistake notebook`);
-      }
-
-      // ✅ UPDATE LEADERBOARD FOR TEST MODE ONLY
-      if (mode === 'test') {
-        console.log('📊 Updating leaderboard for TEST submission...');
-        await updateLeaderboardForTest(correctCount, wrongCount, totalQuestions);
-      } else {
-        console.log('⏭️ Skipping leaderboard update for PRACTICE mode');
-      }
-
       return { success: true, xpEarned: safeXp };
     } catch (err: any) {
       console.error('❌ Error saving performance:', {
@@ -309,7 +280,7 @@ export const useMCQEngine = (
       });
       return { success: false, xpEarned: 0 };
     }
-  }, [state.questions, meta, updateLeaderboardForTest]);
+  }, [state.questions, meta, setId]);
 
   // Fetch MCQs on mount
   useEffect(() => {

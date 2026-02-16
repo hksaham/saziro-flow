@@ -522,6 +522,99 @@ export const deleteMistake = async (uid: string, mistakeId: string): Promise<voi
 };
 
 // ============================================
+// ATOMIC TEST SUBMISSION (batch write)
+// ============================================
+
+/**
+ * Atomically saves test result + updates leaderboard + updates userStats
+ * in a single Firestore batch. If any write fails, all roll back.
+ */
+export const saveTestResultAtomic = async (
+  uid: string,
+  result: {
+    setId: string;
+    coachingId: string;
+    correct: number;
+    wrong: number;
+    score: number;
+    timeTakenSeconds: number;
+  }
+): Promise<{ xpEarned: number }> => {
+  const batch = writeBatch(db);
+  const xpChange = (result.correct * 10) - (result.wrong * 5);
+  const safeXp = Math.max(0, xpChange);
+  const today = new Date().toISOString().split('T')[0];
+
+  // 1. Save test result
+  const testId = `${result.setId}_${Date.now()}`;
+  const resultRef = doc(db, 'results', uid, 'tests', testId);
+  batch.set(resultRef, {
+    ...result,
+    submittedAt: serverTimestamp(),
+  });
+
+  // 2. Update leaderboard (read current first)
+  const leaderboardRef = doc(db, 'leaderboards', result.coachingId, 'users', uid);
+  const lbSnap = await getDoc(leaderboardRef);
+
+  if (lbSnap.exists()) {
+    const current = lbSnap.data() as LeaderboardEntry;
+    const newCorrect = current.correct + result.correct;
+    const newWrong = current.wrong + result.wrong;
+    const newAccuracy = (newCorrect + newWrong) > 0
+      ? Number(((newCorrect / (newCorrect + newWrong)) * 100).toFixed(2))
+      : 0;
+
+    batch.update(leaderboardRef, {
+      xp: Math.max(0, current.xp + xpChange),
+      correct: newCorrect,
+      wrong: newWrong,
+      testsTaken: current.testsTaken + 1,
+      accuracy: newAccuracy,
+      lastTestAt: serverTimestamp(),
+    });
+  }
+
+  // 3. Update userStats (read current first)
+  const statsRef = doc(db, 'userStats', uid);
+  const statsSnap = await getDoc(statsRef);
+
+  if (!statsSnap.exists()) {
+    batch.set(statsRef, {
+      totalXp: safeXp,
+      currentStreak: 1,
+      longestStreak: 1,
+      lastActivityDate: today,
+    });
+  } else {
+    const current = statsSnap.data() as UserStats;
+    const lastDate = current.lastActivityDate;
+    let newStreak = current.currentStreak;
+
+    if (lastDate) {
+      const daysDiff = Math.floor(
+        (new Date(today).getTime() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysDiff === 1) newStreak = current.currentStreak + 1;
+      else if (daysDiff > 1) newStreak = 1;
+    } else {
+      newStreak = 1;
+    }
+
+    batch.update(statsRef, {
+      totalXp: Math.max(0, current.totalXp + xpChange),
+      currentStreak: newStreak,
+      longestStreak: Math.max(current.longestStreak, newStreak),
+      lastActivityDate: today,
+    });
+  }
+
+  await batch.commit();
+  console.log('✅ FIREBASE ATOMIC: Test result + leaderboard + stats saved for', uid);
+  return { xpEarned: safeXp };
+};
+
+// ============================================
 // DAILY TEST OPERATIONS
 // ============================================
 

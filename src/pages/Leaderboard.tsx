@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
+import { firebaseAuth } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -150,6 +151,11 @@ const Leaderboard: React.FC = () => {
   const { live, weekly, monthly, userLiveRank, userWeeklyRank, userMonthlyRank, loading, error } = useLeaderboard();
   const [activeTab, setActiveTab] = useState<'live' | 'weekly' | 'monthly'>('live');
 
+  console.log("AUTH STATE", {
+    firebaseUser: firebaseAuth.currentUser,
+    uid: firebaseAuth.currentUser?.uid,
+  });
+
   // Block if no coaching
   if (!coachingId) {
     return (
@@ -279,7 +285,7 @@ const Leaderboard: React.FC = () => {
               <CardContent>
                 <LeaderboardTable
                   entries={live}
-                  currentUserId={user?.uid}
+                  currentUserId={user?.id}
                   loading={loading}
                   isLive
                 />
@@ -298,7 +304,7 @@ const Leaderboard: React.FC = () => {
               <CardContent>
                 <LeaderboardTable
                   entries={weekly}
-                  currentUserId={user?.uid}
+                  currentUserId={user?.id}
                   loading={loading}
                 />
               </CardContent>
@@ -316,7 +322,7 @@ const Leaderboard: React.FC = () => {
               <CardContent>
                 <LeaderboardTable
                   entries={monthly}
-                  currentUserId={user?.uid}
+                  currentUserId={user?.id}
                   loading={loading}
                 />
               </CardContent>

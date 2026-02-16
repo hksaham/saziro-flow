@@ -50,11 +50,11 @@ export const useDailyTest = () => {
     }
 
     try {
-      console.log('🔥 FIREBASE: Checking daily status for', user.uid);
+      console.log('🔥 FIREBASE: Checking daily status for', user.id);
 
       const [testResult, practiceCount] = await Promise.all([
-        getTodayTestResult(user.uid, coachingId),
-        getTodayPracticeCount(user.uid),
+        getTodayTestResult(user.id, coachingId),
+        getTodayPracticeCount(user.id),
       ]);
 
       setStatus({
@@ -145,7 +145,7 @@ export const useDailyTest = () => {
     try {
       console.log('🔥 FIREBASE: Getting practice questions');
 
-      const practiceCount = await getTodayPracticeCount(user.uid);
+      const practiceCount = await getTodayPracticeCount(user.id);
 
       if (practiceCount >= MAX_PRACTICE_SETS_PER_DAY) {
         return {

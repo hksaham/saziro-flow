@@ -9,6 +9,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import Pending from "./pages/Pending";
 import StudentOnboarding from "./pages/StudentOnboarding";
 import Dashboard from "./pages/Dashboard";
 import MCQs from "./pages/MCQs";
@@ -32,6 +33,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/pending" element={<Pending />} />
               <Route path="/onboarding" element={<StudentOnboarding />} />
               <Route
                 path="/dashboard"
@@ -89,6 +91,7 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

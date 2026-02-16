@@ -55,10 +55,10 @@ const MistakeNotebook = () => {
     setError(null);
 
     try {
-      console.log('🔥 FIREBASE: Fetching mistakes for user', user.uid);
+      console.log('🔥 FIREBASE: Fetching mistakes for user', user.id);
       
       // Fetch from Firebase
-      const firebaseMistakes = await getMistakes(user.uid, 100);
+      const firebaseMistakes = await getMistakes(user.id, 100);
 
       // Transform Firebase data to match UI format
       const transformedData: WrongAnswer[] = firebaseMistakes.map((item: MistakeEntry & { id?: string }) => ({

@@ -261,11 +261,11 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
       const scorePercentage = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
       // Debug log: after test submit
-      if (mode === 'test' && user?.uid && coachingId) {
+      if (mode === 'test' && user?.id && coachingId) {
         console.log("LEADERBOARD WRITE ATTEMPT", {
-          uid: user.uid,
+          uid: user.id,
           coachingId,
-          path: `leaderboards/${coachingId}/users/${user.uid}`,
+          path: `leaderboards/${coachingId}/users/${user.id}`,
         });
       }
       
@@ -278,7 +278,7 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
 
       // Save performance record to Firebase
       if (mode === 'test') {
-        const testId = await saveTestResult(user!.uid, {
+        const testId = await saveTestResult(user!.id, {
           setId: dailyTestId || `test_${Date.now()}`,
           coachingId: coachingId!,
           correct: correctCount,
@@ -302,7 +302,7 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
               source: 'test' as const,
             };
           });
-          await saveMistakes(user!.uid, mistakeRecords);
+          await saveMistakes(user!.id, mistakeRecords);
         }
 
         // Update XP, streak, and leaderboard for TEST ONLY
@@ -316,13 +316,13 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
           totalQuestions
         );
         console.log("LEADERBOARD WRITE RESULT", {
-          uid: user?.uid,
+          uid: user?.id,
           coachingId,
           success: leaderboardSuccess,
         });
       } else {
         // Practice mode - save to Firebase without XP/leaderboard
-        await savePracticeResult(user!.uid, {
+        await savePracticeResult(user!.id, {
           setId: `practice_${practiceSetNumber}_${Date.now()}`,
           correct: correctCount,
           wrong: wrongCount,
@@ -344,7 +344,7 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
               source: 'practice' as const,
             };
           });
-          await saveMistakes(user!.uid, mistakeRecords);
+          await saveMistakes(user!.id, mistakeRecords);
         }
 
         await recordPracticeAttempt(practiceSetNumber, `practice_${practiceSetNumber}`);

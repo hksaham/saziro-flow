@@ -49,11 +49,11 @@ export const useUserStats = () => {
     }
 
     try {
-      console.log('🔥 FIREBASE: Fetching user stats', user.uid);
+      console.log('🔥 FIREBASE: Fetching user stats', user.id);
 
       const [firebaseStats, performance] = await Promise.all([
-        getUserStats(user.uid),
-        getTodayPerformance(user.uid),
+        getUserStats(user.id),
+        getTodayPerformance(user.id),
       ]);
 
       if (firebaseStats) {
@@ -99,8 +99,8 @@ export const useUserStats = () => {
       if (!user) return;
 
       try {
-        console.log('🔥 FIREBASE: Updating user stats', user.uid, `+${xpEarned} XP`);
-        await updateUserStatsAfterTest(user.uid, xpEarned);
+        console.log('🔥 FIREBASE: Updating user stats', user.id, `+${xpEarned} XP`);
+        await updateUserStatsAfterTest(user.id, xpEarned);
 
         // Refresh stats
         await fetchStats();

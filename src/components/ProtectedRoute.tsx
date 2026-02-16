@@ -5,14 +5,18 @@ import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: ReactNode;
+  requireApproved?: boolean;
   requireOnboarded?: boolean;
+  allowedRoles?: ('teacher' | 'student')[];
 }
 
 const ProtectedRoute = ({
   children,
+  requireApproved = true,
   requireOnboarded = true,
+  allowedRoles,
 }: ProtectedRouteProps) => {
-  const { user, profile, loading, isOnboarded } = useAuth();
+  const { user, profile, loading, isPending, isOnboarded, isStudent } = useAuth();
 
   if (loading) {
     return (
@@ -28,10 +32,12 @@ const ProtectedRoute = ({
     );
   }
 
+  // Not authenticated
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
+  // No profile yet (still creating)
   if (!profile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background bg-pattern">
@@ -43,8 +49,19 @@ const ProtectedRoute = ({
     );
   }
 
-  if (requireOnboarded && !isOnboarded) {
+  // Student needs onboarding - redirect to onboarding
+  if (requireOnboarded && isStudent && !isOnboarded) {
     return <Navigate to="/onboarding" replace />;
+  }
+
+  // Pending student - redirect to pending page
+  if (requireApproved && isPending) {
+    return <Navigate to="/pending" replace />;
+  }
+
+  // Check role restrictions
+  if (allowedRoles && profile.role && !allowedRoles.includes(profile.role)) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;

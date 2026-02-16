@@ -92,7 +92,7 @@ export const useLeaderboard = () => {
       const converted = entries.map((entry, index) => convertEntry(entry, index));
 
       // Find user's rank
-      const userEntry = converted.find((e) => e.user_id === user.uid);
+      const userEntry = converted.find((e) => e.user_id === user.id);
 
       console.log(`✅ FIREBASE: Loaded ${converted.length} leaderboard entries`);
 
@@ -125,13 +125,13 @@ export const useLeaderboard = () => {
       }
 
       console.log("LEADERBOARD WRITE ATTEMPT", {
-        uid: user.uid,
+        uid: user.id,
         coachingId,
-        path: `leaderboards/${coachingId}/users/${user.uid}`,
+        path: `leaderboards/${coachingId}/users/${user.id}`,
       });
 
       try {
-        await updateLeaderboardAfterTest(coachingId, user.uid, correctAnswers, wrongAnswers);
+        await updateLeaderboardAfterTest(coachingId, user.id, correctAnswers, wrongAnswers);
         console.log('✅ FIREBASE: Leaderboard updated successfully');
         return true;
       } catch (err: any) {
@@ -151,7 +151,7 @@ export const useLeaderboard = () => {
     // Subscribe to real-time updates from Firebase
     unsubscribeRef.current = subscribeToLeaderboard(coachingId, (entries) => {
       const converted = entries.map((entry, index) => convertEntry(entry, index));
-      const userEntry = converted.find((e) => e.user_id === user?.uid);
+      const userEntry = converted.find((e) => e.user_id === user?.id);
 
       setData({
         live: converted,
@@ -168,7 +168,7 @@ export const useLeaderboard = () => {
         unsubscribeRef.current();
       }
     };
-  }, [coachingId, fetchLeaderboard, user?.uid]);
+  }, [coachingId, fetchLeaderboard, user?.id]);
 
   return {
     ...data,

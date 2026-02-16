@@ -7,7 +7,7 @@ import ToneSelector from '@/components/ui/ToneSelector';
 import { Eye, EyeOff, Loader2, Mail, Lock, ArrowRight } from 'lucide-react';
 
 const Login = () => {
-  const { signIn, user, loading } = useAuth();
+  const { signIn, user, isApproved, isPending, loading } = useAuth();
   const { t } = useTone();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,7 +24,8 @@ const Login = () => {
   }
 
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    if (isPending) return <Navigate to="/pending" replace />;
+    if (isApproved) return <Navigate to="/dashboard" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,6 +60,7 @@ const Login = () => {
             </p>
           </div>
           
+          {/* Decorative Elements */}
           <div className="absolute bottom-20 left-16 w-64 h-64 bg-primary/5 rounded-full blur-3xl animate-float" />
           <div className="absolute top-1/4 right-10 w-32 h-32 border border-primary/20 rounded-2xl rotate-12 animate-float delay-300" />
         </div>

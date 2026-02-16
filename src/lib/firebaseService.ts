@@ -128,10 +128,10 @@ export const updateUser = async (
   data: Partial<FirebaseUser>
 ): Promise<void> => {
   const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, {
+  await setDoc(userRef, {
     ...data,
     updatedAt: serverTimestamp(),
-  });
+  }, { merge: true });
   console.log('✅ FIREBASE: Updated user', uid);
 };
 

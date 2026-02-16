@@ -97,9 +97,11 @@ const StudentOnboarding = () => {
       } else {
         navigate('/dashboard', { replace: true });
       }
-    } catch (err) {
-      console.error('Onboarding error:', err);
-      setError('Something went wrong. Please try again.');
+    } catch (err: any) {
+      console.log('Onboarding error:', err);
+      console.log('Error code:', err?.code);
+      console.log('Error message:', err?.message);
+      setError(err?.message || 'Something went wrong. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

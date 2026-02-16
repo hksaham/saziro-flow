@@ -4,8 +4,7 @@ import {
   getDocs,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { supabase } from '@/integrations/supabase/client'; // Auth only
+import { db, firebaseAuth } from '@/lib/firebase';
 import { seedMCQsToFirestore } from '@/lib/mcqSeeder';
 import { saveTestResult, savePracticeResult, saveMistakes, getUser } from '@/lib/firebaseService';
 import type { MCQQuestion, MCQState, MCQSet } from '@/types/mcq';
@@ -233,18 +232,18 @@ export const useMCQEngine = (
     timeTakenSeconds: number = 0
   ) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const fbUser = firebaseAuth.currentUser;
       
-      if (!user) {
+      if (!fbUser) {
         console.error('❌ Cannot save performance: No authenticated user');
         return { success: false, xpEarned: 0 };
       }
 
       // Get user's coaching ID from Firebase
-      const firebaseUser = await getUser(user.id);
+      const firebaseUser = await getUser(fbUser.uid);
       const coachingId = firebaseUser?.coachingId;
 
-      console.log(`📊 Saving performance for user ${user.id} to Firebase...`);
+      console.log(`📊 Saving performance for user ${fbUser.uid} to Firebase...`);
 
       const correctCount = answeredQuestions.filter(q => q.isCorrect).length;
       const wrongCount = answeredQuestions.filter(q => !q.isCorrect).length;
@@ -255,7 +254,7 @@ export const useMCQEngine = (
 
       // Save to Firebase based on mode
       if (mode === 'test') {
-        await saveTestResult(user.id, {
+        await saveTestResult(fbUser.uid, {
           setId: setId || `test_${Date.now()}`,
           coachingId: coachingId || '',
           correct: correctCount,
@@ -265,7 +264,7 @@ export const useMCQEngine = (
         });
         console.log(`✅ FIREBASE: Test performance saved: ${correctCount}/${totalQuestions} correct, ${safeXp} XP earned`);
       } else {
-        await savePracticeResult(user.id, {
+        await savePracticeResult(fbUser.uid, {
           setId: setId || `practice_${Date.now()}`,
           correct: correctCount,
           wrong: wrongCount,
@@ -290,7 +289,7 @@ export const useMCQEngine = (
           };
         });
 
-        await saveMistakes(user.id, mistakeRecords);
+        await saveMistakes(fbUser.uid, mistakeRecords);
         console.log(`📝 FIREBASE: Saved ${wrongAnswers.length} wrong answers to mistake notebook`);
       }
 

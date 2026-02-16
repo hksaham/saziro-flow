@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { updateUser, getUser } from '@/lib/firebaseService';
-import { supabase } from '@/integrations/supabase/client';
+import { firebaseAuth } from '@/lib/firebase';
 
 export type ToneType = 'chill-bro' | 'friendly-banglish' | 'formal-bangla';
 
@@ -226,9 +226,9 @@ export const ToneProvider = ({ children }: { children: ReactNode }) => {
   // Sync tone from Firebase on mount
   useEffect(() => {
     const fetchProfileTone = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = firebaseAuth.currentUser;
       if (user) {
-        const fbUser = await getUser(user.id);
+        const fbUser = await getUser(user.uid);
         if (fbUser?.tone && ['chill-bro', 'friendly-banglish', 'formal-bangla'].includes(fbUser.tone)) {
           setToneState(fbUser.tone as ToneType);
         }
@@ -240,9 +240,9 @@ export const ToneProvider = ({ children }: { children: ReactNode }) => {
   const setTone = async (newTone: ToneType) => {
     setToneState(newTone);
     // Persist to Firebase
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = firebaseAuth.currentUser;
     if (user) {
-      await updateUser(user.id, { tone: newTone });
+      await updateUser(user.uid, { tone: newTone });
       console.log('✅ FIREBASE: Tone updated to', newTone);
     }
   };

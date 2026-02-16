@@ -4,7 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTone, ToneType } from '@/contexts/ToneContext';
 import { useUserStats } from '@/hooks/useUserStats';
 import { updateUser, getTodayPerformance } from '@/lib/firebaseService';
-import { supabase } from '@/integrations/supabase/client';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { firebaseAuth } from '@/lib/firebase';
 import { 
   ArrowLeft, 
   User, 
@@ -130,14 +131,8 @@ const Profile = () => {
 
   const handleResetPassword = async () => {
     if (!user?.email) return;
-    
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/login`,
-      });
-
-      if (error) throw error;
-
+      await sendPasswordResetEmail(firebaseAuth, user.email);
       toast.success('Password reset email sent! Check your inbox.');
     } catch (err) {
       console.error('Error sending reset email:', err);

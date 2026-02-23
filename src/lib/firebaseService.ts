@@ -31,7 +31,8 @@ export interface FirebaseUser {
   class?: string;
   board?: string;
   tone?: string;
-  coachingId: string | null;
+  coachingId: string | null; // DEPRECATED — kept for backward compat, do not use for new logic
+  activeCoachingId: string | null; // NEW — controls which coaching context is active
   status: 'pending' | 'active' | 'rejected';
   createdAt: Timestamp;
   updatedAt?: Timestamp;
@@ -101,17 +102,32 @@ export const createUser = async (
     status?: 'pending' | 'active';
   }
 ): Promise<void> => {
+  const batch = writeBatch(db);
   const userRef = doc(db, 'users', uid);
-  await setDoc(userRef, {
+
+  batch.set(userRef, {
     uid,
     role: data.role,
     name: data.name,
     email: data.email,
-    coachingId: data.coachingId,
+    coachingId: data.coachingId, // DEPRECATED field — kept for backward compat
+    activeCoachingId: data.coachingId, // NEW field
     status: data.status || (data.role === 'student' ? 'pending' : 'active'),
     createdAt: serverTimestamp(),
   });
-  console.log('✅ FIREBASE: Created user', uid);
+
+  // Create coaching subcollection entry if coachingId exists
+  if (data.coachingId) {
+    const coachingMemberRef = doc(db, 'users', uid, 'coachings', data.coachingId);
+    batch.set(coachingMemberRef, {
+      coachingId: data.coachingId,
+      joinedAt: serverTimestamp(),
+      roleInCoaching: data.role === 'student' ? 'student' : 'teacher',
+    });
+  }
+
+  await batch.commit();
+  console.log('✅ FIREBASE: Created user with coaching subcollection', uid);
 };
 
 export const getUser = async (uid: string): Promise<FirebaseUser | null> => {
@@ -160,8 +176,17 @@ export const approveStudent = async (
   const userRef = doc(db, 'users', uid);
   batch.update(userRef, {
     status: 'active',
+    activeCoachingId: coachingId, // Ensure activeCoachingId is set
     updatedAt: serverTimestamp(),
   });
+
+  // Ensure coaching subcollection entry exists
+  const coachingMemberRef = doc(db, 'users', uid, 'coachings', coachingId);
+  batch.set(coachingMemberRef, {
+    coachingId,
+    joinedAt: serverTimestamp(),
+    roleInCoaching: 'student',
+  }, { merge: true } as any);
 
   // Create leaderboard entry
   const leaderboardRef = doc(db, 'leaderboards', coachingId, 'users', uid);
@@ -692,4 +717,125 @@ export const getTodayPerformance = async (
     testAccuracy: testTotal > 0 ? Math.round((testCorrect / testTotal) * 100) : 0,
     practiceTotal,
   };
+};
+
+// ============================================
+// MULTI-COACHING OPERATIONS
+// ============================================
+
+export interface CoachingMembership {
+  coachingId: string;
+  joinedAt: Timestamp;
+  roleInCoaching: string;
+}
+
+/**
+ * Get all coaching memberships for a user
+ */
+export const getUserCoachings = async (uid: string): Promise<CoachingMembership[]> => {
+  const coachingsRef = collection(db, 'users', uid, 'coachings');
+  const snapshot = await getDocs(coachingsRef);
+  return snapshot.docs.map((doc) => doc.data() as CoachingMembership);
+};
+
+/**
+ * Add a coaching membership for a user (idempotent)
+ */
+export const addUserCoaching = async (
+  uid: string,
+  coachingId: string,
+  role: string = 'student'
+): Promise<void> => {
+  const coachingMemberRef = doc(db, 'users', uid, 'coachings', coachingId);
+  const snap = await getDoc(coachingMemberRef);
+  if (!snap.exists()) {
+    await setDoc(coachingMemberRef, {
+      coachingId,
+      joinedAt: serverTimestamp(),
+      roleInCoaching: role,
+    });
+    console.log('✅ FIREBASE: Added coaching membership', coachingId, 'for user', uid);
+  } else {
+    console.log('ℹ️ FIREBASE: Coaching membership already exists', coachingId, 'for user', uid);
+  }
+};
+
+/**
+ * Switch active coaching for a user (verifies membership first)
+ */
+export const switchActiveCoaching = async (
+  uid: string,
+  coachingId: string
+): Promise<{ success: boolean; error?: string }> => {
+  // Verify membership exists
+  const memberRef = doc(db, 'users', uid, 'coachings', coachingId);
+  const memberSnap = await getDoc(memberRef);
+
+  if (!memberSnap.exists()) {
+    console.error('❌ FIREBASE: User is not a member of coaching', coachingId);
+    return { success: false, error: 'Not a member of this coaching' };
+  }
+
+  // Update activeCoachingId
+  const userRef = doc(db, 'users', uid);
+  await setDoc(userRef, {
+    activeCoachingId: coachingId,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+
+  console.log('✅ FIREBASE: Switched active coaching to', coachingId, 'for user', uid);
+  return { success: true };
+};
+
+/**
+ * Migrate existing user from old coachingId to new subcollection structure.
+ * Called automatically on login. Non-destructive — does NOT remove old field.
+ */
+export const migrateUserCoachings = async (uid: string): Promise<void> => {
+  const userRef = doc(db, 'users', uid);
+  const userSnap = await getDoc(userRef);
+
+  if (!userSnap.exists()) return;
+
+  const userData = userSnap.data() as FirebaseUser;
+  const oldCoachingId = userData.coachingId;
+
+  if (!oldCoachingId) return; // No coaching to migrate
+
+  // Check if subcollection entry already exists
+  const memberRef = doc(db, 'users', uid, 'coachings', oldCoachingId);
+  const memberSnap = await getDoc(memberRef);
+
+  if (!memberSnap.exists()) {
+    console.log('🔄 FIREBASE: Migrating user coaching to subcollection', uid, oldCoachingId);
+
+    const batch = writeBatch(db);
+
+    // Create subcollection entry
+    batch.set(memberRef, {
+      coachingId: oldCoachingId,
+      joinedAt: serverTimestamp(),
+      roleInCoaching: userData.role === 'teacher' ? 'teacher' : 'student',
+    });
+
+    // Set activeCoachingId if not already set
+    if (!userData.activeCoachingId) {
+      batch.update(userRef, {
+        activeCoachingId: oldCoachingId,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
+    console.log('✅ FIREBASE: Migration complete for user', uid);
+  } else {
+    // Ensure activeCoachingId is set
+    if (!userData.activeCoachingId) {
+      await setDoc(userRef, {
+        activeCoachingId: oldCoachingId,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      console.log('✅ FIREBASE: Set activeCoachingId for user', uid);
+    }
+  }
 };

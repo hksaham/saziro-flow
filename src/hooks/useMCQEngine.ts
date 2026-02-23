@@ -239,7 +239,7 @@ export const useMCQEngine = (
 
       // Get user's coaching ID from Firebase
       const firebaseUser = await getUser(fbUser.uid);
-      const coachingId = firebaseUser?.coachingId;
+      const coachingId = firebaseUser?.activeCoachingId || firebaseUser?.coachingId;
 
       console.log(`📊 Saving performance for user ${fbUser.uid} to Firebase...`);
 

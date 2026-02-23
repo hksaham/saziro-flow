@@ -12,6 +12,10 @@ import {
   createUser,
   getCoachingByInviteToken,
   createCoaching,
+  migrateUserCoachings,
+  addUserCoaching,
+  switchActiveCoaching as firebaseSwitchCoaching,
+  getUserCoachings,
   FirebaseUser,
 } from '@/lib/firebaseService';
 
@@ -52,6 +56,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  switchCoaching: (coachingId: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -69,7 +74,7 @@ const firebaseUserToProfile = (fbUser: FirebaseUser): Profile => ({
   user_id: fbUser.uid,
   full_name: fbUser.name,
   role: fbUser.role as UserRole,
-  coaching_id: fbUser.coachingId,
+  coaching_id: fbUser.activeCoachingId || fbUser.coachingId, // Prefer activeCoachingId
   student_status: fbUser.status as StudentStatus,
   student_class: fbUser.class || null,
   board: fbUser.board || null,
@@ -111,6 +116,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (firebaseUser) {
         const appUser = toAppUser(firebaseUser);
         setUser(appUser);
+
+        // Phase 2: Auto-migrate old coachingId to subcollection on login
+        try {
+          await migrateUserCoachings(firebaseUser.uid);
+        } catch (migErr) {
+          console.warn('⚠️ FIREBASE: Migration check failed (non-blocking):', migErr);
+        }
+
         const profileData = await fetchProfile(firebaseUser.uid);
         setProfile(profileData);
       } else {
@@ -183,6 +196,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setProfile(null);
   };
 
+  const switchCoaching = async (targetCoachingId: string): Promise<{ success: boolean; error?: string }> => {
+    if (!user) return { success: false, error: 'Not authenticated' };
+    const result = await firebaseSwitchCoaching(user.id, targetCoachingId);
+    if (result.success) {
+      await refreshProfile();
+    }
+    return result;
+  };
+
   const isTeacher = profile?.role === 'teacher';
   const isStudent = profile?.role === 'student';
   const isApproved = isTeacher || (isStudent && profile?.student_status === 'active');
@@ -207,6 +229,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signIn,
         signOut,
         refreshProfile,
+        switchCoaching,
       }}
     >
       {children}

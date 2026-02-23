@@ -31,6 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import ManageCoachings from '@/components/student/ManageCoachings';
 
 interface PerformanceMetrics {
   totalMcqsAttempted: number;
@@ -407,6 +408,9 @@ const Profile = () => {
             </div>
           </div>
         </section>
+
+        {/* Section 3.5: My Coachings */}
+        <ManageCoachings />
 
         {/* Section 4: Settings & Controls */}
         <section className="space-y-4 animate-fade-in delay-300">

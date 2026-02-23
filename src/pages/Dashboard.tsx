@@ -18,6 +18,7 @@ import StatusCard from '@/components/student/StatusCard';
 import ActionButton from '@/components/student/ActionButton';
 import FeatureCard from '@/components/student/FeatureCard';
 import PerformanceCard from '@/components/student/PerformanceCard';
+import CoachingSwitcher from '@/components/student/CoachingSwitcher';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -349,6 +350,11 @@ const Dashboard = () => {
                   />
                   <PerformanceCard type="rank" label={t.yourRank} value="—" />
                 </div>
+              </section>
+
+              {/* Section 5: Coaching Switcher */}
+              <section className="animate-fade-in delay-400">
+                <CoachingSwitcher />
               </section>
             </div>
           )}

@@ -14,15 +14,13 @@ const Signup = () => {
   const [searchParams] = useSearchParams();
   const tokenFromUrl = searchParams.get('token') || '';
 
-  // If token is present → student-only flow, no role selection needed
-  // If no token → teacher-only flow
-  const isStudentFlow = !!tokenFromUrl;
-  const [role, setRole] = useState<Role | null>(isStudentFlow ? 'student' : null);
+  // If token in URL → student flow auto-selected; otherwise show role selection
+  const [role, setRole] = useState<Role | null>(tokenFromUrl ? 'student' : null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [coachingName, setCoachingName] = useState('');
-  const [inviteToken] = useState(tokenFromUrl); // Read-only from URL
+  const [inviteToken, setInviteToken] = useState(tokenFromUrl);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -110,10 +108,10 @@ const Signup = () => {
               </p>
             </div>
 
-            {/* Role Selection - only shown for teachers (no token) */}
-            {!role && !isStudentFlow && (
+            {/* Role Selection */}
+            {!role && (
               <div className="space-y-4 animate-fade-in">
-                <p className="text-center text-muted-foreground mb-6">Create your coaching center</p>
+                <p className="text-center text-muted-foreground mb-6">Choose your role to get started</p>
                 
                 <button
                   onClick={() => setRole('teacher')}
@@ -129,25 +127,32 @@ const Signup = () => {
                   <ArrowRight className="w-5 h-5 text-muted-foreground ml-auto group-hover:text-primary group-hover:translate-x-1 transition-all" />
                 </button>
 
-                <p className="text-center text-sm text-muted-foreground mt-4">
-                  Are you a student? Ask your teacher for an invite link.
-                </p>
+                <button
+                  onClick={() => setRole('student')}
+                  className="w-full card-premium p-6 flex items-center gap-4 hover:border-primary/50 transition-all group"
+                >
+                  <div className="w-14 h-14 rounded-xl bg-accent flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                    <BookOpen className="w-7 h-7 text-accent-foreground" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold text-foreground text-lg">{t.student}</h3>
+                    <p className="text-sm text-muted-foreground">Join with invite token</p>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-muted-foreground ml-auto group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                </button>
               </div>
             )}
 
             {/* Signup Form */}
             {role && (
               <form onSubmit={handleSubmit} className="space-y-5 animate-fade-in">
-                {/* Back button only for teachers */}
-                {!isStudentFlow && (
-                  <button
-                    type="button"
-                    onClick={() => setRole(null)}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-                  >
-                    ← Back to role selection
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setRole(null)}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+                >
+                  ← Back to role selection
+                </button>
 
                 {error && (
                   <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm animate-scale-in">
@@ -238,18 +243,21 @@ const Signup = () => {
 
                 {role === 'student' && (
                   <div className="space-y-2 animate-fade-in">
-                    <label className="text-sm font-medium text-foreground">Invite Token</label>
+                    <label className="text-sm font-medium text-foreground">{t.enterInviteToken}</label>
                     <div className="relative">
                       <Ticket className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                       <input
                         type="text"
                         value={inviteToken}
-                        readOnly
-                        className="input-premium pl-12 opacity-60 cursor-not-allowed"
-                        placeholder="Token from invite link"
+                        onChange={(e) => setInviteToken(e.target.value)}
+                        className="input-premium pl-12"
+                        placeholder="Paste invite token here"
+                        required
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">Token provided via your invite link</p>
+                    {tokenFromUrl && (
+                      <p className="text-xs text-muted-foreground">Token auto-filled from invite link</p>
+                    )}
                   </div>
                 )}
 

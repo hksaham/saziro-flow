@@ -106,7 +106,7 @@ const Dashboard = () => {
 
         console.log('✅ FIREBASE: Approved student and created leaderboard entry:', student.name);
       } else if (status === 'rejected') {
-        await rejectStudent(studentUid);
+        await rejectStudent(studentUid, coachingId || undefined);
         console.log('✅ FIREBASE: Rejected student:', studentUid);
       }
 

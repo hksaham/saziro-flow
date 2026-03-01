@@ -111,7 +111,7 @@ export const createUser = async (
     name: data.name,
     email: data.email,
     coachingId: data.coachingId, // DEPRECATED field — kept for backward compat
-    activeCoachingId: data.coachingId, // NEW field
+    activeCoachingId: data.role === 'teacher' ? data.coachingId : null, // Students must be approved first
     status: data.status || (data.role === 'student' ? 'pending' : 'active'),
     createdAt: serverTimestamp(),
   });
@@ -123,6 +123,7 @@ export const createUser = async (
       coachingId: data.coachingId,
       joinedAt: serverTimestamp(),
       roleInCoaching: data.role === 'student' ? 'student' : 'teacher',
+      membershipStatus: data.role === 'student' ? 'pending' : 'approved',
     });
   }
 
@@ -154,15 +155,30 @@ export const updateUser = async (
 export const getPendingStudents = async (
   coachingId: string
 ): Promise<FirebaseUser[]> => {
-  const usersRef = collection(db, 'users');
+  // Query the coachings subcollection group for pending memberships
+  const { collectionGroup } = await import('firebase/firestore');
+  const coachingsGroup = collectionGroup(db, 'coachings');
   const q = query(
-    usersRef,
+    coachingsGroup,
     where('coachingId', '==', coachingId),
-    where('role', '==', 'student'),
-    where('status', '==', 'pending')
+    where('membershipStatus', '==', 'pending'),
+    where('roleInCoaching', '==', 'student')
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => doc.data() as FirebaseUser);
+
+  // Fetch full user data for each pending membership
+  const pendingUsers: FirebaseUser[] = [];
+  for (const memberDoc of snapshot.docs) {
+    // The parent path is users/{uid}/coachings/{coachingId}
+    const uid = memberDoc.ref.parent.parent?.id;
+    if (uid) {
+      const userData = await getUser(uid);
+      if (userData) {
+        pendingUsers.push(userData);
+      }
+    }
+  }
+  return pendingUsers;
 };
 
 export const approveStudent = async (
@@ -172,20 +188,28 @@ export const approveStudent = async (
 ): Promise<void> => {
   const batch = writeBatch(db);
 
-  // Update user status
+  // Update user root status
   const userRef = doc(db, 'users', uid);
-  batch.update(userRef, {
+  
+  // Check if student has no activeCoachingId yet — set it
+  const userSnap = await getDoc(userRef);
+  const existingUser = userSnap.data() as FirebaseUser | undefined;
+  const updateData: Record<string, any> = {
     status: 'active',
-    activeCoachingId: coachingId, // Ensure activeCoachingId is set
     updatedAt: serverTimestamp(),
-  });
+  };
+  if (!existingUser?.activeCoachingId) {
+    updateData.activeCoachingId = coachingId;
+  }
+  batch.update(userRef, updateData);
 
-  // Ensure coaching subcollection entry exists
+  // Update coaching subcollection entry — set membershipStatus to approved
   const coachingMemberRef = doc(db, 'users', uid, 'coachings', coachingId);
   batch.set(coachingMemberRef, {
     coachingId,
     joinedAt: serverTimestamp(),
     roleInCoaching: 'student',
+    membershipStatus: 'approved',
   }, { merge: true } as any);
 
   // Create leaderboard entry
@@ -204,25 +228,39 @@ export const approveStudent = async (
     lastTestAt: null,
   });
 
-  // Create user stats
+  // Create user stats if not exists
   const statsRef = doc(db, 'userStats', uid);
-  batch.set(statsRef, {
-    totalXp: 0,
-    currentStreak: 0,
-    longestStreak: 0,
-    lastActivityDate: null,
-  });
+  const statsSnap = await getDoc(statsRef);
+  if (!statsSnap.exists()) {
+    batch.set(statsRef, {
+      totalXp: 0,
+      currentStreak: 0,
+      longestStreak: 0,
+      lastActivityDate: null,
+    });
+  }
 
   await batch.commit();
   console.log('✅ FIREBASE: Approved student and created leaderboard entry', uid);
 };
 
-export const rejectStudent = async (uid: string): Promise<void> => {
+export const rejectStudent = async (uid: string, coachingId?: string): Promise<void> => {
+  const batch = writeBatch(db);
   const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, {
+  batch.update(userRef, {
     status: 'rejected',
     updatedAt: serverTimestamp(),
   });
+
+  // Update membership status in subcollection if coachingId provided
+  if (coachingId) {
+    const coachingMemberRef = doc(db, 'users', uid, 'coachings', coachingId);
+    batch.set(coachingMemberRef, {
+      membershipStatus: 'rejected',
+    }, { merge: true } as any);
+  }
+
+  await batch.commit();
   console.log('✅ FIREBASE: Rejected student', uid);
 };
 
@@ -727,6 +765,7 @@ export interface CoachingMembership {
   coachingId: string;
   joinedAt: Timestamp;
   roleInCoaching: string;
+  membershipStatus: 'pending' | 'approved' | 'rejected';
 }
 
 /**
@@ -745,7 +784,7 @@ export const addUserCoaching = async (
   uid: string,
   coachingId: string,
   role: string = 'student'
-): Promise<void> => {
+): Promise<{ alreadyExists: boolean; status?: string }> => {
   const coachingMemberRef = doc(db, 'users', uid, 'coachings', coachingId);
   const snap = await getDoc(coachingMemberRef);
   if (!snap.exists()) {
@@ -753,10 +792,14 @@ export const addUserCoaching = async (
       coachingId,
       joinedAt: serverTimestamp(),
       roleInCoaching: role,
+      membershipStatus: role === 'student' ? 'pending' : 'approved',
     });
-    console.log('✅ FIREBASE: Added coaching membership', coachingId, 'for user', uid);
+    console.log('✅ FIREBASE: Added coaching membership (pending)', coachingId, 'for user', uid);
+    return { alreadyExists: false };
   } else {
+    const data = snap.data();
     console.log('ℹ️ FIREBASE: Coaching membership already exists', coachingId, 'for user', uid);
+    return { alreadyExists: true, status: data?.membershipStatus };
   }
 };
 
@@ -767,13 +810,19 @@ export const switchActiveCoaching = async (
   uid: string,
   coachingId: string
 ): Promise<{ success: boolean; error?: string }> => {
-  // Verify membership exists
+  // Verify membership exists and is approved
   const memberRef = doc(db, 'users', uid, 'coachings', coachingId);
   const memberSnap = await getDoc(memberRef);
 
   if (!memberSnap.exists()) {
     console.error('❌ FIREBASE: User is not a member of coaching', coachingId);
     return { success: false, error: 'Not a member of this coaching' };
+  }
+
+  const memberData = memberSnap.data();
+  if (memberData?.membershipStatus !== 'approved') {
+    console.error('❌ FIREBASE: Membership not approved for coaching', coachingId);
+    return { success: false, error: 'Membership not yet approved' };
   }
 
   // Update activeCoachingId
@@ -811,11 +860,12 @@ export const migrateUserCoachings = async (uid: string): Promise<void> => {
 
     const batch = writeBatch(db);
 
-    // Create subcollection entry
+    // Create subcollection entry — legacy users are already approved
     batch.set(memberRef, {
       coachingId: oldCoachingId,
       joinedAt: serverTimestamp(),
       roleInCoaching: userData.role === 'teacher' ? 'teacher' : 'student',
+      membershipStatus: 'approved',
     });
 
     // Set activeCoachingId if not already set

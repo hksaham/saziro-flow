@@ -161,8 +161,7 @@ export const getPendingStudents = async (
   const q = query(
     coachingsGroup,
     where('coachingId', '==', coachingId),
-    where('membershipStatus', '==', 'pending'),
-    where('roleInCoaching', '==', 'student')
+    where('membershipStatus', '==', 'pending')
   );
   const snapshot = await getDocs(q);
 

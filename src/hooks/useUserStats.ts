@@ -90,7 +90,7 @@ export const useUserStats = () => {
       console.error('❌ FIREBASE: Error fetching stats:', err);
       setLoading(false);
     }
-  }, [user]);
+  }, [user, coachingId]);
 
   // Update XP and streak ONLY for test completion
   // STRICT: Practice mode should NEVER call this

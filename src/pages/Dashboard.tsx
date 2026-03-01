@@ -56,13 +56,20 @@ const Dashboard = () => {
       setCoaching(coachingData);
 
       // Fetch pending students from Firebase
-      const students = await getPendingStudents(coachingId);
-      setPendingStudents(students);
-
-      console.log('✅ FIREBASE: Coaching data loaded', {
-        coaching: coachingData?.name,
-        pendingStudents: students.length,
-      });
+      try {
+        const students = await getPendingStudents(coachingId);
+        setPendingStudents(students);
+        console.log('✅ FIREBASE: Coaching data loaded', {
+          coaching: coachingData?.name,
+          pendingStudents: students.length,
+        });
+      } catch (pendingErr: any) {
+        console.error('❌ FIREBASE: Error fetching pending students:', pendingErr);
+        // If it's a missing index error, show helpful message
+        if (pendingErr?.message?.includes('index')) {
+          console.error('⚠️ A Firestore composite index is required. Check the console for the creation link.');
+        }
+      }
     } catch (err) {
       console.error('❌ FIREBASE: Error fetching coaching data:', err);
     } finally {

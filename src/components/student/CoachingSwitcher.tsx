@@ -42,6 +42,8 @@ const CoachingSwitcher = () => {
       const memberships = await getUserCoachings(user.id);
       const options: CoachingOption[] = [];
       for (const m of memberships) {
+        // Only show approved coachings in the switcher
+        if (m.membershipStatus !== 'approved') continue;
         const coaching = await getCoaching(m.coachingId);
         options.push({
           coachingId: m.coachingId,

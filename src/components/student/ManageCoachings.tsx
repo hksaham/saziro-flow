@@ -8,8 +8,7 @@ import {
   CoachingMembership,
   Coaching,
 } from '@/lib/firebaseService';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+// No direct Firestore imports needed — all logic in firebaseService
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +23,7 @@ import { toast } from 'sonner';
 
 interface CoachingWithDetails extends CoachingMembership {
   name: string;
+  membershipStatus: 'pending' | 'approved' | 'rejected';
 }
 
 const ManageCoachings = () => {
@@ -73,40 +73,25 @@ const ManageCoachings = () => {
         return;
       }
 
-      // Check duplicate
-      const existing = coachings.find((c) => c.coachingId === coaching.coachingId);
-      if (existing) {
-        toast.info('You are already in this coaching.');
+      // Add membership (returns info about existing membership)
+      const result = await addUserCoaching(user.id, coaching.coachingId, 'student');
+
+      if (result.alreadyExists) {
+        if (result.status === 'pending') {
+          toast.info('You already requested to join this coaching. Waiting for teacher approval.');
+        } else if (result.status === 'rejected') {
+          toast.error('Your request to this coaching was rejected.');
+        } else {
+          toast.info('You are already in this coaching.');
+        }
         return;
       }
 
-      // Add membership
-      await addUserCoaching(user.id, coaching.coachingId, 'student');
-
-      // Create leaderboard entry if not exists
-      const lbRef = doc(db, 'leaderboards', coaching.coachingId, 'users', user.id);
-      const lbSnap = await getDoc(lbRef);
-      if (!lbSnap.exists()) {
-        await setDoc(lbRef, {
-          uid: user.id,
-          name: profile?.full_name || 'Student',
-          class: profile?.student_class || null,
-          board: profile?.board || null,
-          xp: 0,
-          testsTaken: 0,
-          correct: 0,
-          wrong: 0,
-          accuracy: 0,
-          joinedAt: serverTimestamp(),
-          lastTestAt: null,
-        });
-      }
-
-      // Set as active
-      await switchCoaching(coaching.coachingId);
+      // DO NOT create leaderboard entry — teacher must approve first
+      // DO NOT set activeCoachingId — teacher must approve first
 
       setInviteCode('');
-      toast.success(`Joined "${coaching.name}" successfully!`);
+      toast.success('Request sent. Waiting for teacher approval.');
       await fetchCoachings();
     } catch (err) {
       console.error('Error joining coaching:', err);
@@ -116,11 +101,16 @@ const ManageCoachings = () => {
     }
   };
 
-  const handleSwitch = async (coachingId: string) => {
-    if (coachingId === activeCoachingId) return;
-    setSwitching(coachingId);
+  const handleSwitch = async (targetCoachingId: string) => {
+    if (targetCoachingId === activeCoachingId) return;
+    const membership = coachings.find((c) => c.coachingId === targetCoachingId);
+    if (membership?.membershipStatus !== 'approved') {
+      toast.error('This coaching is not yet approved.');
+      return;
+    }
+    setSwitching(targetCoachingId);
     try {
-      const result = await switchCoaching(coachingId);
+      const result = await switchCoaching(targetCoachingId);
       if (result.success) {
         toast.success('Coaching switched!');
       } else {
@@ -192,6 +182,16 @@ const ManageCoachings = () => {
                             ACTIVE
                           </span>
                         )}
+                        {c.membershipStatus === 'pending' && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-warning/20 text-warning">
+                            PENDING
+                          </span>
+                        )}
+                        {c.membershipStatus === 'rejected' && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-destructive/20 text-destructive">
+                            REJECTED
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Joined {formatDate(c.joinedAt)}
@@ -199,7 +199,7 @@ const ManageCoachings = () => {
                     </div>
                   </div>
 
-                  {!isActive && (
+                  {!isActive && c.membershipStatus === 'approved' && (
                     <Button
                       size="sm"
                       variant="outline"

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTone } from '@/contexts/ToneContext';
@@ -37,45 +37,53 @@ const Dashboard = () => {
   const testMcqsToday = todayTestPerformance.total;
   const practiceMcqsToday = todayPracticePerformance.total;
 
-  useEffect(() => {
-    if (isTeacher && coachingId) {
-      fetchCoachingData();
-    } else {
+  // Fetch all coaching-scoped data whenever coachingId changes
+  const fetchLobbyData = useCallback(async () => {
+    if (!coachingId) {
+      setCoaching(null);
+      setPendingStudents([]);
       setLoading(false);
+      return;
     }
-  }, [isTeacher, coachingId]);
 
-  const fetchCoachingData = async () => {
-    if (!coachingId) return;
-
+    setLoading(true);
     try {
-      console.log('🔥 FIREBASE: Fetching coaching data', coachingId);
+      console.log('🔥 FIREBASE: Loading lobby for coaching', coachingId);
 
-      // Fetch coaching details from Firebase
+      // Always fetch coaching details (for name display)
       const coachingData = await getCoaching(coachingId);
       setCoaching(coachingData);
 
-      // Fetch pending students from Firebase
-      try {
-        const students = await getPendingStudents(coachingId);
-        setPendingStudents(students);
-        console.log('✅ FIREBASE: Coaching data loaded', {
-          coaching: coachingData?.name,
-          pendingStudents: students.length,
-        });
-      } catch (pendingErr: any) {
-        console.error('❌ FIREBASE: Error fetching pending students:', pendingErr);
-        // If it's a missing index error, show helpful message
-        if (pendingErr?.message?.includes('index')) {
-          console.error('⚠️ A Firestore composite index is required. Check the console for the creation link.');
+      // Teacher-specific: fetch pending students
+      if (isTeacher) {
+        try {
+          const students = await getPendingStudents(coachingId);
+          setPendingStudents(students);
+          console.log('✅ FIREBASE: Lobby loaded', {
+            coaching: coachingData?.name,
+            pendingStudents: students.length,
+          });
+        } catch (pendingErr: any) {
+          console.error('❌ FIREBASE: Error fetching pending students:', pendingErr);
+          if (pendingErr?.message?.includes('index')) {
+            console.error('⚠️ A Firestore composite index is required. Check the console for the creation link.');
+          }
         }
+      } else {
+        setPendingStudents([]);
+        console.log('✅ FIREBASE: Student lobby loaded', coachingData?.name);
       }
     } catch (err) {
-      console.error('❌ FIREBASE: Error fetching coaching data:', err);
+      console.error('❌ FIREBASE: Error loading lobby data:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [coachingId, isTeacher]);
+
+  // Re-run whenever coachingId changes (i.e., coaching switch triggers full reload)
+  useEffect(() => {
+    fetchLobbyData();
+  }, [fetchLobbyData]);
 
   const copyInviteLink = () => {
     if (coaching?.inviteToken) {
@@ -92,44 +100,27 @@ const Dashboard = () => {
       const student = pendingStudents.find((s) => s.uid === studentUid);
 
       if (status === 'approved' && student && coachingId) {
-        console.log("LEADERBOARD WRITE ATTEMPT", {
-          uid: student.uid,
-          coachingId,
-          path: `leaderboards/${coachingId}/users/${student.uid}`,
-        });
-
-        // Approve student and create leaderboard entry in Firebase
         await approveStudent(student.uid, coachingId, {
           name: student.name,
           class: student.class,
           board: student.board,
         });
-
-        console.log("LEADERBOARD WRITE RESULT", {
-          uid: student.uid,
-          coachingId,
-          error: null,
-        });
-
-        console.log('✅ FIREBASE: Approved student and created leaderboard entry:', student.name);
+        console.log('✅ FIREBASE: Approved student:', student.name);
       } else if (status === 'rejected') {
         await rejectStudent(studentUid, coachingId || undefined);
         console.log('✅ FIREBASE: Rejected student:', studentUid);
       }
 
-      // Remove from pending list
       setPendingStudents((prev) => prev.filter((s) => s.uid !== studentUid));
     } catch (err: any) {
-      console.error("LEADERBOARD WRITE RESULT", {
-        uid: studentUid,
-        coachingId,
-        error: err?.message,
-      });
       console.error('❌ FIREBASE: Error updating student status:', err);
     } finally {
       setProcessingId(null);
     }
   };
+
+  // Dynamic welcome text: coaching name or fallback
+  const lobbyName = coaching?.name || 'Study Buddy';
 
   if (loading) {
     return (
@@ -158,10 +149,11 @@ const Dashboard = () => {
       {/* Main Content */}
       <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 overflow-x-hidden">
         <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-fade-in">
-          {/* Welcome Section */}
+          {/* Welcome Section — shows coaching name */}
           <div>
             <h1 className="text-3xl font-display font-bold text-foreground">
-              {t.welcome.replace('!', `, ${profile?.full_name}!`)}
+              Welcome to <span className="text-gradient-emerald">{lobbyName}</span>
+              {profile?.full_name ? `, ${profile.full_name}` : ''}!
             </h1>
             <p className="text-muted-foreground mt-2">
               {isTeacher ? 'Manage your coaching center' : 'Start learning'}
@@ -303,42 +295,12 @@ const Dashboard = () => {
               {/* Section 3: Feature Cards Grid */}
               <section className="animate-fade-in delay-200 w-full">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 lg:gap-5 w-full">
-                  <FeatureCard
-                    type="mcqs"
-                    label={t.mcqs}
-                    isActive={true}
-                    onClick={() => navigate('/mcqs')}
-                  />
-                  <FeatureCard
-                    type="cq-explainer"
-                    label={t.cqExplainer}
-                    isActive={false}
-                    comingSoonLabel={t.comingSoon}
-                  />
-                  <FeatureCard
-                    type="mistake-notebook"
-                    label={t.mistakeNotebook}
-                    isActive={true}
-                    onClick={() => navigate('/mistakes')}
-                  />
-                  <FeatureCard
-                    type="suggestions"
-                    label={t.suggestions}
-                    isActive={false}
-                    comingSoonLabel={t.comingSoon}
-                  />
-                  <FeatureCard
-                    type="leaderboard"
-                    label={t.leaderboard}
-                    isActive={true}
-                    onClick={() => navigate('/leaderboard')}
-                  />
-                  <FeatureCard
-                    type="profile"
-                    label={t.profile}
-                    isActive={true}
-                    onClick={() => navigate('/profile')}
-                  />
+                  <FeatureCard type="mcqs" label={t.mcqs} isActive={true} onClick={() => navigate('/mcqs')} />
+                  <FeatureCard type="cq-explainer" label={t.cqExplainer} isActive={false} comingSoonLabel={t.comingSoon} />
+                  <FeatureCard type="mistake-notebook" label={t.mistakeNotebook} isActive={true} onClick={() => navigate('/mistakes')} />
+                  <FeatureCard type="suggestions" label={t.suggestions} isActive={false} comingSoonLabel={t.comingSoon} />
+                  <FeatureCard type="leaderboard" label={t.leaderboard} isActive={true} onClick={() => navigate('/leaderboard')} />
+                  <FeatureCard type="profile" label={t.profile} isActive={true} onClick={() => navigate('/profile')} />
                 </div>
               </section>
 
@@ -350,11 +312,7 @@ const Dashboard = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <PerformanceCard type="mcqs-today" label="Test MCQs" value={testMcqsToday} />
                   <PerformanceCard type="mcqs-today" label="Practice MCQs" value={practiceMcqsToday} />
-                  <PerformanceCard
-                    type="rank"
-                    label="Test Accuracy"
-                    value={`${todayTestPerformance.accuracy}%`}
-                  />
+                  <PerformanceCard type="rank" label="Test Accuracy" value={`${todayTestPerformance.accuracy}%`} />
                   <PerformanceCard type="rank" label={t.yourRank} value="—" />
                 </div>
               </section>

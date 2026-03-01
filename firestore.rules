@@ -1,0 +1,240 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+
+    // Check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Check if request is from the document owner
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    // Get user document data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Check if user is a teacher
+    function isTeacher() {
+      return isAuth() && getUserData().role == 'teacher';
+    }
+
+    // Check if user is a student
+    function isStudent() {
+      return isAuth() && getUserData().role == 'student';
+    }
+
+    // Check if user is the teacher of a specific coaching
+    function isTeacherOfCoaching(coachingId) {
+      return isAuth() && 
+        get(/databases/$(database)/documents/coachings/$(coachingId)).data.teacherUid == request.auth.uid;
+    }
+
+    // Check if user has approved membership in a coaching
+    function hasApprovedMembership(uid, coachingId) {
+      return get(/databases/$(database)/documents/users/$(uid)/coachings/$(coachingId)).data.membershipStatus == 'approved';
+    }
+
+    // ============================================
+    // 1. USERS COLLECTION
+    // users/{uid}
+    // ============================================
+    match /users/{uid} {
+      // Users can read their own document
+      // Teachers can read any user doc (needed for pending student list)
+      allow read: if isOwner(uid) || isTeacher();
+
+      // Users can create their own document during signup
+      allow create: if isOwner(uid) && 
+        request.resource.data.uid == uid &&
+        request.resource.data.role in ['student', 'teacher'] &&
+        request.resource.data.keys().hasAll(['uid', 'role', 'name', 'email', 'createdAt']);
+
+      // Users can update their own document with restricted fields
+      // Students CANNOT change: role, status, coachingId (admin-level fields)
+      // They CAN change: name, class, board, tone, activeCoachingId, updatedAt
+      allow update: if isOwner(uid) && (
+        // Student self-update (onboarding, profile edit, coaching switch)
+        (isStudent() && !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['role', 'status', 'coachingId'])) ||
+        // Teacher self-update
+        isTeacher()
+      );
+
+      // Teachers can update student documents (approve/reject)
+      allow update: if isTeacher() && 
+        resource.data.role == 'student' &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'activeCoachingId', 'updatedAt']);
+
+      // Never allow delete
+      allow delete: if false;
+
+      // ============================================
+      // 1a. USER COACHING MEMBERSHIPS (subcollection)
+      // users/{uid}/coachings/{coachingId}
+      // ============================================
+      match /coachings/{coachingId} {
+        // Users can read their own memberships
+        allow read: if isOwner(uid);
+
+        // Teachers can read memberships for their coaching
+        // (needed for collectionGroup query on pending students)
+        allow read: if isTeacherOfCoaching(coachingId);
+
+        // Students can create a pending membership (joining via invite)
+        allow create: if isOwner(uid) && 
+          request.resource.data.membershipStatus == 'pending' &&
+          request.resource.data.roleInCoaching == 'student' &&
+          request.resource.data.keys().hasAll(['coachingId', 'joinedAt', 'roleInCoaching', 'membershipStatus']);
+
+        // Teachers can create their own membership (teacher role, auto-approved)
+        allow create: if isOwner(uid) && 
+          request.resource.data.membershipStatus == 'approved' &&
+          request.resource.data.roleInCoaching == 'teacher';
+
+        // Teachers of the coaching can update membership (approve/reject)
+        allow update: if isTeacherOfCoaching(coachingId) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['membershipStatus', 'joinedAt']);
+
+        // Migration: owner can create approved membership for self (legacy migration)
+        allow update: if isOwner(uid) && 
+          resource.data.membershipStatus == request.resource.data.membershipStatus;
+
+        // Never allow student to self-approve
+        // (create rule already enforces membershipStatus == 'pending' for students)
+
+        allow delete: if false;
+      }
+    }
+
+    // ============================================
+    // 2. COACHINGS COLLECTION
+    // coachings/{coachingId}
+    // ============================================
+    match /coachings/{coachingId} {
+      // Any authenticated user can read (needed for invite token lookup)
+      allow read: if isAuth();
+
+      // Only authenticated users can create (teacher creates coaching)
+      allow create: if isAuth() && 
+        request.resource.data.teacherUid == request.auth.uid &&
+        request.resource.data.keys().hasAll(['coachingId', 'name', 'teacherUid', 'inviteToken', 'createdAt']);
+
+      // Only the coaching teacher can update
+      allow update: if isTeacherOfCoaching(coachingId);
+
+      allow delete: if false;
+    }
+
+    // ============================================
+    // 3. LEADERBOARDS COLLECTION
+    // leaderboards/{coachingId}/users/{uid}
+    // ============================================
+    match /leaderboards/{coachingId}/users/{uid} {
+      // Anyone with approved membership can read the leaderboard
+      allow read: if isAuth();
+
+      // Teacher can create leaderboard entry (on student approval)
+      allow create: if isTeacherOfCoaching(coachingId);
+
+      // Students can update their OWN leaderboard entry (after test submission)
+      // This is needed because saveTestResultAtomic runs on client
+      allow update: if isOwner(uid) && 
+        hasApprovedMembership(uid, coachingId) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['xp', 'correct', 'wrong', 'testsTaken', 'accuracy', 'lastTestAt']);
+
+      // Teacher can also update (manual corrections)
+      allow update: if isTeacherOfCoaching(coachingId);
+
+      allow delete: if false;
+    }
+
+    // ============================================
+    // 4. USER STATS COLLECTION
+    // userStats/{uid}
+    // ============================================
+    match /userStats/{uid} {
+      // Users can read their own stats
+      allow read: if isOwner(uid);
+
+      // Users can create/update their own stats (after test submission)
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['totalXp', 'currentStreak', 'longestStreak', 'lastActivityDate']);
+
+      // Teacher can create stats for student (on approval)
+      allow create: if isTeacher();
+
+      allow delete: if false;
+    }
+
+    // ============================================
+    // 5. RESULTS COLLECTION
+    // results/{uid}/tests/{testId}
+    // results/{uid}/practice/{setId}
+    // ============================================
+    match /results/{uid}/{type}/{docId} {
+      // Users can read their own results
+      allow read: if isOwner(uid);
+
+      // Users can create their own results (test/practice submission)
+      allow create: if isOwner(uid);
+
+      // No updates or deletes to submitted results
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ============================================
+    // 6. MISTAKES COLLECTION
+    // mistakes/{uid}/items/{itemId}
+    // ============================================
+    match /mistakes/{uid}/items/{itemId} {
+      // Users can read their own mistakes
+      allow read: if isOwner(uid);
+
+      // Users can create their own mistakes
+      allow create: if isOwner(uid);
+
+      // Users can delete their own mistakes
+      allow delete: if isOwner(uid);
+
+      // No updates to mistakes
+      allow update: if false;
+    }
+
+    // ============================================
+    // 7. MCQ SETS COLLECTION
+    // mcq_sets/{setId}
+    // ============================================
+    match /mcq_sets/{setId} {
+      // Any authenticated user can read MCQ sets
+      allow read: if isAuth();
+
+      // Any authenticated user can create (seeding + daily test creation)
+      // In production, restrict to teacher or system
+      allow create: if isAuth();
+
+      // No updates or deletes
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ============================================
+    // DEFAULT: DENY ALL
+    // ============================================
+    // Any path not matched above is denied by default
+  }
+}

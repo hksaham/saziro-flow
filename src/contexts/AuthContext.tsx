@@ -145,20 +145,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     inviteToken?: string
   ): Promise<{ error: string | null }> => {
     try {
-      // Create Firebase Auth account
+      let coachingId: string | null = null;
+
+      // STUDENTS: Validate invite token BEFORE creating auth user
+      if (role === 'student') {
+        if (!inviteToken) {
+          return { error: 'Invite token is required to sign up as a student.' };
+        }
+        const coaching = await getCoachingByInviteToken(inviteToken);
+        if (!coaching) {
+          return { error: 'Invalid or expired invite link. Please ask your teacher for a valid link.' };
+        }
+        coachingId = coaching.coachingId;
+      }
+
+      // Create Firebase Auth account (only after token is validated for students)
       const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
       const firebaseUser = userCredential.user;
 
-      let coachingId: string | null = null;
-
+      // TEACHERS: Create coaching after auth
       if (role === 'teacher' && coachingName) {
         coachingId = await createCoaching(firebaseUser.uid, coachingName);
-      } else if (role === 'student' && inviteToken) {
-        const coaching = await getCoachingByInviteToken(inviteToken);
-        if (!coaching) {
-          return { error: 'Invalid invite token' };
-        }
-        coachingId = coaching.coachingId;
       }
 
       // Create user profile in Firebase Firestore

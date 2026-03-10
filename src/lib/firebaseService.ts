@@ -15,6 +15,7 @@ import {
   onSnapshot,
   increment,
   writeBatch,
+  collectionGroup,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -31,8 +32,7 @@ export interface FirebaseUser {
   class?: string;
   board?: string;
   tone?: string;
-  coachingId: string | null; // DEPRECATED — kept for backward compat, do not use for new logic
-  activeCoachingId: string | null; // NEW — controls which coaching context is active
+  activeCoachingId: string | null;
   status: 'pending' | 'active' | 'rejected';
   createdAt: Timestamp;
   updatedAt?: Timestamp;
@@ -46,12 +46,26 @@ export interface Coaching {
   createdAt: Timestamp;
 }
 
+export interface CoachingMember {
+  uid: string;
+  name: string;
+  email: string;
+  role: 'student' | 'teacher';
+  membershipStatus: 'pending' | 'approved' | 'rejected';
+  class?: string;
+  board?: string;
+  joinedAt: Timestamp;
+}
+
 export interface LeaderboardEntry {
   uid: string;
   name: string;
   class?: string;
   board?: string;
   xp: number;
+  streak: number;
+  longestStreak: number;
+  lastActivityDate: string | null;
   testsTaken: number;
   correct: number;
   wrong: number;
@@ -61,8 +75,9 @@ export interface LeaderboardEntry {
 }
 
 export interface MCQResult {
+  uid: string;
   setId: string;
-  coachingId: string;
+  mode: 'test' | 'practice';
   correct: number;
   wrong: number;
   score: number;
@@ -71,6 +86,7 @@ export interface MCQResult {
 }
 
 export interface MistakeEntry {
+  uid: string;
   questionId: string;
   questionText: string;
   options: string[];
@@ -88,8 +104,16 @@ export interface UserStats {
   lastActivityDate: string | null;
 }
 
+// Legacy compat type for CoachingSwitcher/ManageCoachings
+export interface CoachingMembership {
+  coachingId: string;
+  joinedAt: Timestamp;
+  roleInCoaching: string;
+  membershipStatus: 'pending' | 'approved' | 'rejected';
+}
+
 // ============================================
-// USER OPERATIONS
+// USER OPERATIONS (Global — users exist outside coachings)
 // ============================================
 
 export const createUser = async (
@@ -103,32 +127,34 @@ export const createUser = async (
   }
 ): Promise<void> => {
   const batch = writeBatch(db);
-  const userRef = doc(db, 'users', uid);
 
+  // Create global user profile
+  const userRef = doc(db, 'users', uid);
   batch.set(userRef, {
     uid,
     role: data.role,
     name: data.name,
     email: data.email,
-    coachingId: data.coachingId, // DEPRECATED field — kept for backward compat
-    activeCoachingId: data.role === 'teacher' ? data.coachingId : null, // Students must be approved first
+    activeCoachingId: data.role === 'teacher' ? data.coachingId : null,
     status: data.status || (data.role === 'student' ? 'pending' : 'active'),
     createdAt: serverTimestamp(),
   });
 
-  // Create coaching subcollection entry if coachingId exists
+  // Create membership inside coaching server
   if (data.coachingId) {
-    const coachingMemberRef = doc(db, 'users', uid, 'coachings', data.coachingId);
-    batch.set(coachingMemberRef, {
-      coachingId: data.coachingId,
-      joinedAt: serverTimestamp(),
-      roleInCoaching: data.role === 'student' ? 'student' : 'teacher',
+    const memberRef = doc(db, 'coachings', data.coachingId, 'members', uid);
+    batch.set(memberRef, {
+      uid,
+      name: data.name,
+      email: data.email,
+      role: data.role,
       membershipStatus: data.role === 'student' ? 'pending' : 'approved',
+      joinedAt: serverTimestamp(),
     });
   }
 
   await batch.commit();
-  console.log('✅ FIREBASE: Created user with coaching subcollection', uid);
+  console.log('✅ FIREBASE: Created user with server-style membership', uid);
 };
 
 export const getUser = async (uid: string): Promise<FirebaseUser | null> => {
@@ -152,29 +178,25 @@ export const updateUser = async (
   console.log('✅ FIREBASE: Updated user', uid);
 };
 
+// ============================================
+// MEMBERSHIP OPERATIONS (Server-scoped)
+// Path: coachings/{coachingId}/members/{uid}
+// ============================================
+
 export const getPendingStudents = async (
   coachingId: string
 ): Promise<FirebaseUser[]> => {
-  // Query the coachings subcollection group for pending memberships
-  const { collectionGroup } = await import('firebase/firestore');
-  const coachingsGroup = collectionGroup(db, 'coachings');
-  const q = query(
-    coachingsGroup,
-    where('coachingId', '==', coachingId),
-    where('membershipStatus', '==', 'pending')
-  );
+  const membersRef = collection(db, 'coachings', coachingId, 'members');
+  const q = query(membersRef, where('membershipStatus', '==', 'pending'));
   const snapshot = await getDocs(q);
 
-  // Fetch full user data for each pending membership
+  // Fetch full user data for each pending member
   const pendingUsers: FirebaseUser[] = [];
   for (const memberDoc of snapshot.docs) {
-    // The parent path is users/{uid}/coachings/{coachingId}
-    const uid = memberDoc.ref.parent.parent?.id;
-    if (uid) {
-      const userData = await getUser(uid);
-      if (userData) {
-        pendingUsers.push(userData);
-      }
+    const uid = memberDoc.id;
+    const userData = await getUser(uid);
+    if (userData) {
+      pendingUsers.push(userData);
     }
   }
   return pendingUsers;
@@ -189,8 +211,6 @@ export const approveStudent = async (
 
   // Update user root status
   const userRef = doc(db, 'users', uid);
-  
-  // Check if student has no activeCoachingId yet — set it
   const userSnap = await getDoc(userRef);
   const existingUser = userSnap.data() as FirebaseUser | undefined;
   const updateData: Record<string, any> = {
@@ -202,23 +222,30 @@ export const approveStudent = async (
   }
   batch.update(userRef, updateData);
 
-  // Update coaching subcollection entry — set membershipStatus to approved
-  const coachingMemberRef = doc(db, 'users', uid, 'coachings', coachingId);
-  batch.set(coachingMemberRef, {
-    coachingId,
-    joinedAt: serverTimestamp(),
-    roleInCoaching: 'student',
+  // Update membership in coaching server
+  const memberRef = doc(db, 'coachings', coachingId, 'members', uid);
+  batch.set(memberRef, {
+    uid,
+    name: userData.name,
+    email: existingUser?.email || '',
+    role: 'student',
+    class: userData.class || null,
+    board: userData.board || null,
     membershipStatus: 'approved',
-  }, { merge: true } as any);
+    joinedAt: serverTimestamp(),
+  }, { merge: true });
 
-  // Create leaderboard entry
-  const leaderboardRef = doc(db, 'leaderboards', coachingId, 'users', uid);
+  // Create leaderboard entry inside coaching server
+  const leaderboardRef = doc(db, 'coachings', coachingId, 'leaderboard', uid);
   batch.set(leaderboardRef, {
     uid,
     name: userData.name,
     class: userData.class || null,
     board: userData.board || null,
     xp: 0,
+    streak: 0,
+    longestStreak: 0,
+    lastActivityDate: null,
     testsTaken: 0,
     correct: 0,
     wrong: 0,
@@ -227,20 +254,8 @@ export const approveStudent = async (
     lastTestAt: null,
   });
 
-  // Create user stats if not exists
-  const statsRef = doc(db, 'userStats', uid);
-  const statsSnap = await getDoc(statsRef);
-  if (!statsSnap.exists()) {
-    batch.set(statsRef, {
-      totalXp: 0,
-      currentStreak: 0,
-      longestStreak: 0,
-      lastActivityDate: null,
-    });
-  }
-
   await batch.commit();
-  console.log('✅ FIREBASE: Approved student and created leaderboard entry', uid);
+  console.log('✅ FIREBASE: Approved student with server-scoped leaderboard', uid);
 };
 
 export const rejectStudent = async (uid: string, coachingId?: string): Promise<void> => {
@@ -251,12 +266,11 @@ export const rejectStudent = async (uid: string, coachingId?: string): Promise<v
     updatedAt: serverTimestamp(),
   });
 
-  // Update membership status in subcollection if coachingId provided
   if (coachingId) {
-    const coachingMemberRef = doc(db, 'users', uid, 'coachings', coachingId);
-    batch.set(coachingMemberRef, {
+    const memberRef = doc(db, 'coachings', coachingId, 'members', uid);
+    batch.set(memberRef, {
       membershipStatus: 'rejected',
-    }, { merge: true } as any);
+    }, { merge: true });
   }
 
   await batch.commit();
@@ -265,6 +279,7 @@ export const rejectStudent = async (uid: string, coachingId?: string): Promise<v
 
 // ============================================
 // COACHING OPERATIONS
+// Path: coachings/{coachingId}
 // ============================================
 
 export const createCoaching = async (
@@ -273,7 +288,7 @@ export const createCoaching = async (
 ): Promise<string> => {
   const coachingRef = doc(collection(db, 'coachings'));
   const inviteToken = generateInviteToken();
-  
+
   await setDoc(coachingRef, {
     coachingId: coachingRef.id,
     name,
@@ -308,23 +323,24 @@ export const getCoachingByInviteToken = async (
 };
 
 const generateInviteToken = (): string => {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15);
+  return Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15);
 };
 
 // ============================================
-// LEADERBOARD OPERATIONS
+// LEADERBOARD OPERATIONS (Server-scoped)
+// Path: coachings/{coachingId}/leaderboard/{uid}
 // ============================================
 
 export const getLeaderboard = async (
   coachingId: string
 ): Promise<LeaderboardEntry[]> => {
-  console.log("LEADERBOARD READ", {
+  console.log('LEADERBOARD READ', {
     coachingId,
-    queryPath: `leaderboards/${coachingId}/users`,
+    queryPath: `coachings/${coachingId}/leaderboard`,
   });
 
-  const leaderboardRef = collection(db, 'leaderboards', coachingId, 'users');
+  const leaderboardRef = collection(db, 'coachings', coachingId, 'leaderboard');
   const q = query(
     leaderboardRef,
     orderBy('xp', 'desc'),
@@ -333,7 +349,7 @@ export const getLeaderboard = async (
   );
   const snapshot = await getDocs(q);
 
-  console.log("LEADERBOARD SNAPSHOT SIZE", snapshot.size);
+  console.log('LEADERBOARD SNAPSHOT SIZE', snapshot.size);
 
   return snapshot.docs.map((doc) => doc.data() as LeaderboardEntry);
 };
@@ -342,7 +358,7 @@ export const subscribeToLeaderboard = (
   coachingId: string,
   callback: (entries: LeaderboardEntry[]) => void
 ): (() => void) => {
-  const leaderboardRef = collection(db, 'leaderboards', coachingId, 'users');
+  const leaderboardRef = collection(db, 'coachings', coachingId, 'leaderboard');
   const q = query(
     leaderboardRef,
     orderBy('xp', 'desc'),
@@ -357,133 +373,71 @@ export const subscribeToLeaderboard = (
   });
 };
 
-export const updateLeaderboardAfterTest = async (
-  coachingId: string,
-  uid: string,
-  correctAnswers: number,
-  wrongAnswers: number
-): Promise<void> => {
-  const leaderboardRef = doc(db, 'leaderboards', coachingId, 'users', uid);
-  const leaderboardSnap = await getDoc(leaderboardRef);
-
-  if (!leaderboardSnap.exists()) {
-    console.warn('⚠️ FIREBASE: Leaderboard entry not found for user', uid);
-    return;
-  }
-
-  const current = leaderboardSnap.data() as LeaderboardEntry;
-  const xpChange = (correctAnswers * 10) - (wrongAnswers * 5);
-  const newXp = Math.max(0, current.xp + xpChange);
-  const newCorrect = current.correct + correctAnswers;
-  const newWrong = current.wrong + wrongAnswers;
-  const newTestsTaken = current.testsTaken + 1;
-  const newAccuracy = (newCorrect + newWrong) > 0
-    ? Number(((newCorrect / (newCorrect + newWrong)) * 100).toFixed(2))
-    : 0;
-
-  await updateDoc(leaderboardRef, {
-    xp: newXp,
-    correct: newCorrect,
-    wrong: newWrong,
-    testsTaken: newTestsTaken,
-    accuracy: newAccuracy,
-    lastTestAt: serverTimestamp(),
-  });
-
-  console.log('✅ FIREBASE: Updated leaderboard for user', uid, `+${xpChange} XP`);
-};
-
 // ============================================
-// USER STATS OPERATIONS
+// USER STATS OPERATIONS (Server-scoped)
+// Stats are now stored in coachings/{coachingId}/leaderboard/{uid}
+// No separate userStats collection needed
 // ============================================
 
-export const getUserStats = async (uid: string): Promise<UserStats | null> => {
-  const statsRef = doc(db, 'userStats', uid);
-  const statsSnap = await getDoc(statsRef);
-  if (statsSnap.exists()) {
-    return statsSnap.data() as UserStats;
+export const getUserStats = async (uid: string, coachingId: string): Promise<UserStats | null> => {
+  if (!coachingId) return null;
+  const lbRef = doc(db, 'coachings', coachingId, 'leaderboard', uid);
+  const lbSnap = await getDoc(lbRef);
+  if (lbSnap.exists()) {
+    const data = lbSnap.data() as LeaderboardEntry;
+    return {
+      totalXp: data.xp,
+      currentStreak: data.streak ?? 0,
+      longestStreak: data.longestStreak ?? 0,
+      lastActivityDate: data.lastActivityDate ?? null,
+    };
   }
   return null;
 };
 
 export const updateUserStatsAfterTest = async (
   uid: string,
+  coachingId: string,
   xpEarned: number
 ): Promise<void> => {
-  const statsRef = doc(db, 'userStats', uid);
-  const statsSnap = await getDoc(statsRef);
-  const today = new Date().toISOString().split('T')[0];
-
-  if (!statsSnap.exists()) {
-    // Create new stats
-    await setDoc(statsRef, {
-      totalXp: Math.max(0, xpEarned),
-      currentStreak: 1,
-      longestStreak: 1,
-      lastActivityDate: today,
-    });
-  } else {
-    const current = statsSnap.data() as UserStats;
-    const lastDate = current.lastActivityDate;
-    
-    let newStreak = current.currentStreak;
-    if (lastDate) {
-      const lastDateObj = new Date(lastDate);
-      const todayObj = new Date(today);
-      const daysDiff = Math.floor(
-        (todayObj.getTime() - lastDateObj.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      
-      if (daysDiff === 1) {
-        newStreak = current.currentStreak + 1;
-      } else if (daysDiff > 1) {
-        newStreak = 1; // Reset streak
-      }
-      // If daysDiff === 0, keep same streak (already did test today)
-    } else {
-      newStreak = 1;
-    }
-
-    await updateDoc(statsRef, {
-      totalXp: Math.max(0, current.totalXp + xpEarned),
-      currentStreak: newStreak,
-      longestStreak: Math.max(current.longestStreak, newStreak),
-      lastActivityDate: today,
-    });
-  }
-
-  console.log('✅ FIREBASE: Updated user stats', uid);
+  // Stats are updated atomically in saveTestResultAtomic
+  // This function is kept for compatibility but delegates to the leaderboard entry
+  console.log('✅ FIREBASE: Stats update handled by atomic test save');
 };
 
 // ============================================
-// MCQ RESULTS OPERATIONS
+// MCQ RESULTS OPERATIONS (Server-scoped)
+// Path: coachings/{coachingId}/results/{resultId}
 // ============================================
 
 export const saveTestResult = async (
   uid: string,
+  coachingId: string,
   result: {
     setId: string;
-    coachingId: string;
     correct: number;
     wrong: number;
     score: number;
     timeTakenSeconds: number;
   }
 ): Promise<string> => {
-  const testId = `${result.setId}_${Date.now()}`;
-  const resultRef = doc(db, 'results', uid, 'tests', testId);
-  
+  const testId = `${uid}_${result.setId}_${Date.now()}`;
+  const resultRef = doc(db, 'coachings', coachingId, 'results', testId);
+
   await setDoc(resultRef, {
+    uid,
+    mode: 'test',
     ...result,
     submittedAt: serverTimestamp(),
   });
 
-  console.log('✅ FIREBASE: Saved test result', testId);
+  console.log('✅ FIREBASE: Saved test result to coaching server', testId);
   return testId;
 };
 
 export const savePracticeResult = async (
   uid: string,
+  coachingId: string,
   result: {
     setId: string;
     correct: number;
@@ -491,14 +445,17 @@ export const savePracticeResult = async (
     score: number;
   }
 ): Promise<void> => {
-  const practiceRef = doc(db, 'results', uid, 'practice', result.setId);
-  
-  await setDoc(practiceRef, {
+  const practiceId = `${uid}_${result.setId}_${Date.now()}`;
+  const resultRef = doc(db, 'coachings', coachingId, 'results', practiceId);
+
+  await setDoc(resultRef, {
+    uid,
+    mode: 'practice',
     ...result,
     submittedAt: serverTimestamp(),
   });
 
-  console.log('✅ FIREBASE: Saved practice result', result.setId);
+  console.log('✅ FIREBASE: Saved practice result to coaching server');
 };
 
 export const getTodayTestResult = async (
@@ -506,29 +463,29 @@ export const getTodayTestResult = async (
   coachingId: string
 ): Promise<MCQResult | null> => {
   const today = new Date().toISOString().split('T')[0];
-  const testsRef = collection(db, 'results', uid, 'tests');
-  const snapshot = await getDocs(testsRef);
-  
-  for (const doc of snapshot.docs) {
-    const data = doc.data() as MCQResult;
-    if (data.coachingId === coachingId) {
-      const submittedDate = data.submittedAt?.toDate?.()?.toISOString().split('T')[0];
-      if (submittedDate === today) {
-        return data;
-      }
+  const resultsRef = collection(db, 'coachings', coachingId, 'results');
+  const q = query(resultsRef, where('uid', '==', uid), where('mode', '==', 'test'));
+  const snapshot = await getDocs(q);
+
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data() as MCQResult;
+    const submittedDate = data.submittedAt?.toDate?.()?.toISOString().split('T')[0];
+    if (submittedDate === today) {
+      return data;
     }
   }
   return null;
 };
 
-export const getTodayPracticeCount = async (uid: string): Promise<number> => {
+export const getTodayPracticeCount = async (uid: string, coachingId: string): Promise<number> => {
   const today = new Date().toISOString().split('T')[0];
-  const practiceRef = collection(db, 'results', uid, 'practice');
-  const snapshot = await getDocs(practiceRef);
-  
+  const resultsRef = collection(db, 'coachings', coachingId, 'results');
+  const q = query(resultsRef, where('uid', '==', uid), where('mode', '==', 'practice'));
+  const snapshot = await getDocs(q);
+
   let count = 0;
-  for (const doc of snapshot.docs) {
-    const data = doc.data();
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data();
     const submittedDate = data.submittedAt?.toDate?.()?.toISOString().split('T')[0];
     if (submittedDate === today) {
       count++;
@@ -538,11 +495,13 @@ export const getTodayPracticeCount = async (uid: string): Promise<number> => {
 };
 
 // ============================================
-// MISTAKE NOTEBOOK OPERATIONS
+// MISTAKE NOTEBOOK OPERATIONS (Server-scoped)
+// Path: coachings/{coachingId}/mistakes/{id}
 // ============================================
 
 export const saveMistakes = async (
   uid: string,
+  coachingId: string,
   mistakes: Array<{
     questionId: string;
     questionText: string;
@@ -556,46 +515,49 @@ export const saveMistakes = async (
   const batch = writeBatch(db);
 
   for (const mistake of mistakes) {
-    const mistakeRef = doc(collection(db, 'mistakes', uid, 'items'));
+    const mistakeRef = doc(collection(db, 'coachings', coachingId, 'mistakes'));
     batch.set(mistakeRef, {
+      uid,
       ...mistake,
       createdAt: serverTimestamp(),
     });
   }
 
   await batch.commit();
-  console.log('✅ FIREBASE: Saved', mistakes.length, 'mistakes');
+  console.log('✅ FIREBASE: Saved', mistakes.length, 'mistakes to coaching server');
 };
 
 export const getMistakes = async (
   uid: string,
+  coachingId: string,
   limitCount: number = 50
-): Promise<MistakeEntry[]> => {
-  const mistakesRef = collection(db, 'mistakes', uid, 'items');
-  const q = query(mistakesRef, orderBy('createdAt', 'desc'), limit(limitCount));
+): Promise<(MistakeEntry & { id: string })[]> => {
+  const mistakesRef = collection(db, 'coachings', coachingId, 'mistakes');
+  const q = query(
+    mistakesRef,
+    where('uid', '==', uid),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount)
+  );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as MistakeEntry & { id: string });
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as MistakeEntry & { id: string });
 };
 
-export const deleteMistake = async (uid: string, mistakeId: string): Promise<void> => {
-  const mistakeRef = doc(db, 'mistakes', uid, 'items', mistakeId);
+export const deleteMistake = async (coachingId: string, mistakeId: string): Promise<void> => {
+  const mistakeRef = doc(db, 'coachings', coachingId, 'mistakes', mistakeId);
   await deleteDoc(mistakeRef);
   console.log('✅ FIREBASE: Deleted mistake', mistakeId);
 };
 
 // ============================================
-// ATOMIC TEST SUBMISSION (batch write)
+// ATOMIC TEST SUBMISSION (Server-scoped batch write)
 // ============================================
 
-/**
- * Atomically saves test result + updates leaderboard + updates userStats
- * in a single Firestore batch. If any write fails, all roll back.
- */
 export const saveTestResultAtomic = async (
   uid: string,
+  coachingId: string,
   result: {
     setId: string;
-    coachingId: string;
     correct: number;
     wrong: number;
     score: number;
@@ -607,16 +569,18 @@ export const saveTestResultAtomic = async (
   const safeXp = Math.max(0, xpChange);
   const today = new Date().toISOString().split('T')[0];
 
-  // 1. Save test result
-  const testId = `${result.setId}_${Date.now()}`;
-  const resultRef = doc(db, 'results', uid, 'tests', testId);
+  // 1. Save test result inside coaching server
+  const testId = `${uid}_${result.setId}_${Date.now()}`;
+  const resultRef = doc(db, 'coachings', coachingId, 'results', testId);
   batch.set(resultRef, {
+    uid,
+    mode: 'test',
     ...result,
     submittedAt: serverTimestamp(),
   });
 
-  // 2. Update leaderboard (read current first)
-  const leaderboardRef = doc(db, 'leaderboards', result.coachingId, 'users', uid);
+  // 2. Update leaderboard (XP + streak + accuracy) inside coaching server
+  const leaderboardRef = doc(db, 'coachings', coachingId, 'leaderboard', uid);
   const lbSnap = await getDoc(leaderboardRef);
 
   if (lbSnap.exists()) {
@@ -627,52 +591,35 @@ export const saveTestResultAtomic = async (
       ? Number(((newCorrect / (newCorrect + newWrong)) * 100).toFixed(2))
       : 0;
 
+    // Streak calculation (per coaching)
+    const lastDate = current.lastActivityDate;
+    let newStreak = current.streak ?? 0;
+    if (lastDate) {
+      const daysDiff = Math.floor(
+        (new Date(today).getTime() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysDiff === 1) newStreak = (current.streak ?? 0) + 1;
+      else if (daysDiff > 1) newStreak = 1;
+      // daysDiff === 0: keep same streak
+    } else {
+      newStreak = 1;
+    }
+
     batch.update(leaderboardRef, {
       xp: Math.max(0, current.xp + xpChange),
       correct: newCorrect,
       wrong: newWrong,
       testsTaken: current.testsTaken + 1,
       accuracy: newAccuracy,
+      streak: newStreak,
+      longestStreak: Math.max(current.longestStreak ?? 0, newStreak),
+      lastActivityDate: today,
       lastTestAt: serverTimestamp(),
     });
   }
 
-  // 3. Update userStats (read current first)
-  const statsRef = doc(db, 'userStats', uid);
-  const statsSnap = await getDoc(statsRef);
-
-  if (!statsSnap.exists()) {
-    batch.set(statsRef, {
-      totalXp: safeXp,
-      currentStreak: 1,
-      longestStreak: 1,
-      lastActivityDate: today,
-    });
-  } else {
-    const current = statsSnap.data() as UserStats;
-    const lastDate = current.lastActivityDate;
-    let newStreak = current.currentStreak;
-
-    if (lastDate) {
-      const daysDiff = Math.floor(
-        (new Date(today).getTime() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      if (daysDiff === 1) newStreak = current.currentStreak + 1;
-      else if (daysDiff > 1) newStreak = 1;
-    } else {
-      newStreak = 1;
-    }
-
-    batch.update(statsRef, {
-      totalXp: Math.max(0, current.totalXp + xpChange),
-      currentStreak: newStreak,
-      longestStreak: Math.max(current.longestStreak, newStreak),
-      lastActivityDate: today,
-    });
-  }
-
   await batch.commit();
-  console.log('✅ FIREBASE ATOMIC: Test result + leaderboard + stats saved for', uid);
+  console.log('✅ FIREBASE ATOMIC: Test result + leaderboard saved in coaching server for', uid);
   return { xpEarned: safeXp };
 };
 
@@ -686,7 +633,7 @@ export const getOrCreateDailyTest = async (
 ): Promise<{ setId: string; questionIds: string[] }> => {
   const today = new Date().toISOString().split('T')[0];
   const setId = `${coachingId}_${today}`;
-  
+
   const testRef = doc(db, 'mcq_sets', setId);
   const testSnap = await getDoc(testRef);
 
@@ -711,41 +658,36 @@ export const getOrCreateDailyTest = async (
 };
 
 // ============================================
-// PERFORMANCE DASHBOARD
+// PERFORMANCE DASHBOARD (Server-scoped)
 // ============================================
 
 export const getTodayPerformance = async (
-  uid: string
+  uid: string,
+  coachingId: string
 ): Promise<{ testTotal: number; testAccuracy: number; practiceTotal: number }> => {
-  const today = new Date().toISOString().split('T')[0];
-  
-  // Get test results
-  const testsRef = collection(db, 'results', uid, 'tests');
-  const testSnapshot = await getDocs(testsRef);
-  
-  let testTotal = 0;
-  let testCorrect = 0;
-  
-  for (const doc of testSnapshot.docs) {
-    const data = doc.data();
-    const submittedDate = data.submittedAt?.toDate?.()?.toISOString().split('T')[0];
-    if (submittedDate === today) {
-      testTotal += (data.correct || 0) + (data.wrong || 0);
-      testCorrect += data.correct || 0;
-    }
+  if (!coachingId) {
+    return { testTotal: 0, testAccuracy: 0, practiceTotal: 0 };
   }
 
-  // Get practice results
-  const practiceRef = collection(db, 'results', uid, 'practice');
-  const practiceSnapshot = await getDocs(practiceRef);
-  
+  const today = new Date().toISOString().split('T')[0];
+  const resultsRef = collection(db, 'coachings', coachingId, 'results');
+  const q = query(resultsRef, where('uid', '==', uid));
+  const snapshot = await getDocs(q);
+
+  let testTotal = 0;
+  let testCorrect = 0;
   let practiceTotal = 0;
-  
-  for (const doc of practiceSnapshot.docs) {
-    const data = doc.data();
+
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data();
     const submittedDate = data.submittedAt?.toDate?.()?.toISOString().split('T')[0];
     if (submittedDate === today) {
-      practiceTotal += (data.correct || 0) + (data.wrong || 0);
+      if (data.mode === 'test') {
+        testTotal += (data.correct || 0) + (data.wrong || 0);
+        testCorrect += data.correct || 0;
+      } else if (data.mode === 'practice') {
+        practiceTotal += (data.correct || 0) + (data.wrong || 0);
+      }
     }
   }
 
@@ -757,74 +699,83 @@ export const getTodayPerformance = async (
 };
 
 // ============================================
-// MULTI-COACHING OPERATIONS
+// MULTI-COACHING OPERATIONS (Server-scoped)
 // ============================================
 
-export interface CoachingMembership {
-  coachingId: string;
-  joinedAt: Timestamp;
-  roleInCoaching: string;
-  membershipStatus: 'pending' | 'approved' | 'rejected';
-}
-
 /**
- * Get all coaching memberships for a user
+ * Get all coaching memberships for a user by scanning coaching servers
  */
 export const getUserCoachings = async (uid: string): Promise<CoachingMembership[]> => {
-  const coachingsRef = collection(db, 'users', uid, 'coachings');
-  const snapshot = await getDocs(coachingsRef);
-  return snapshot.docs.map((doc) => doc.data() as CoachingMembership);
+  // Use collectionGroup query across all members subcollections
+  const membersGroup = collectionGroup(db, 'members');
+  const q = query(membersGroup, where('uid', '==', uid));
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map((d) => {
+    const data = d.data();
+    // Extract coachingId from the path: coachings/{coachingId}/members/{uid}
+    const coachingId = d.ref.parent.parent?.id || '';
+    return {
+      coachingId,
+      joinedAt: data.joinedAt,
+      roleInCoaching: data.role || 'student',
+      membershipStatus: data.membershipStatus,
+    } as CoachingMembership;
+  });
 };
 
 /**
- * Add a coaching membership for a user (idempotent)
+ * Add a coaching membership for a user (creates member in coaching server)
  */
 export const addUserCoaching = async (
   uid: string,
   coachingId: string,
   role: string = 'student'
 ): Promise<{ alreadyExists: boolean; status?: string }> => {
-  const coachingMemberRef = doc(db, 'users', uid, 'coachings', coachingId);
-  const snap = await getDoc(coachingMemberRef);
+  const memberRef = doc(db, 'coachings', coachingId, 'members', uid);
+  const snap = await getDoc(memberRef);
   if (!snap.exists()) {
-    await setDoc(coachingMemberRef, {
-      coachingId,
-      joinedAt: serverTimestamp(),
-      roleInCoaching: role,
+    const userData = await getUser(uid);
+    await setDoc(memberRef, {
+      uid,
+      name: userData?.name || '',
+      email: userData?.email || '',
+      role,
       membershipStatus: role === 'student' ? 'pending' : 'approved',
+      joinedAt: serverTimestamp(),
     });
-    console.log('✅ FIREBASE: Added coaching membership (pending)', coachingId, 'for user', uid);
+    console.log('✅ FIREBASE: Added member to coaching server (pending)', coachingId, 'for user', uid);
     return { alreadyExists: false };
   } else {
     const data = snap.data();
-    console.log('ℹ️ FIREBASE: Coaching membership already exists', coachingId, 'for user', uid);
+    console.log('ℹ️ FIREBASE: Membership already exists in coaching server', coachingId, 'for user', uid);
     return { alreadyExists: true, status: data?.membershipStatus };
   }
 };
 
 /**
- * Switch active coaching for a user (verifies membership first)
+ * Switch active coaching for a user (verifies membership in coaching server)
  */
 export const switchActiveCoaching = async (
   uid: string,
   coachingId: string
 ): Promise<{ success: boolean; error?: string }> => {
-  // Verify membership exists and is approved
-  const memberRef = doc(db, 'users', uid, 'coachings', coachingId);
+  // Verify membership exists in coaching server
+  const memberRef = doc(db, 'coachings', coachingId, 'members', uid);
   const memberSnap = await getDoc(memberRef);
 
   if (!memberSnap.exists()) {
-    console.error('❌ FIREBASE: User is not a member of coaching', coachingId);
+    console.error('❌ FIREBASE: User is not a member of coaching server', coachingId);
     return { success: false, error: 'Not a member of this coaching' };
   }
 
   const memberData = memberSnap.data();
   if (memberData?.membershipStatus !== 'approved') {
-    console.error('❌ FIREBASE: Membership not approved for coaching', coachingId);
+    console.error('❌ FIREBASE: Membership not approved in coaching server', coachingId);
     return { success: false, error: 'Membership not yet approved' };
   }
 
-  // Update activeCoachingId
+  // Update activeCoachingId on global user
   const userRef = doc(db, 'users', uid);
   await setDoc(userRef, {
     activeCoachingId: coachingId,
@@ -836,8 +787,9 @@ export const switchActiveCoaching = async (
 };
 
 /**
- * Migrate existing user from old coachingId to new subcollection structure.
- * Called automatically on login. Non-destructive — does NOT remove old field.
+ * Migrate existing user from old structure to server-style architecture.
+ * Moves data from users/{uid}/coachings/{coachingId} to coachings/{coachingId}/members/{uid}
+ * and from leaderboards/{coachingId}/users/{uid} to coachings/{coachingId}/leaderboard/{uid}
  */
 export const migrateUserCoachings = async (uid: string): Promise<void> => {
   const userRef = doc(db, 'users', uid);
@@ -845,46 +797,88 @@ export const migrateUserCoachings = async (uid: string): Promise<void> => {
 
   if (!userSnap.exists()) return;
 
-  const userData = userSnap.data() as FirebaseUser;
-  const oldCoachingId = userData.coachingId;
+  const userData = userSnap.data() as any;
 
-  if (!oldCoachingId) return; // No coaching to migrate
+  // Migrate from old subcollection structure: users/{uid}/coachings/{coachingId}
+  try {
+    const oldCoachingsRef = collection(db, 'users', uid, 'coachings');
+    const oldSnapshot = await getDocs(oldCoachingsRef);
 
-  // Check if subcollection entry already exists
-  const memberRef = doc(db, 'users', uid, 'coachings', oldCoachingId);
-  const memberSnap = await getDoc(memberRef);
+    for (const oldDoc of oldSnapshot.docs) {
+      const oldData = oldDoc.data();
+      const coachingId = oldData.coachingId || oldDoc.id;
 
-  if (!memberSnap.exists()) {
-    console.log('🔄 FIREBASE: Migrating user coaching to subcollection', uid, oldCoachingId);
+      // Check if already migrated to server model
+      const newMemberRef = doc(db, 'coachings', coachingId, 'members', uid);
+      const newMemberSnap = await getDoc(newMemberRef);
 
-    const batch = writeBatch(db);
+      if (!newMemberSnap.exists()) {
+        console.log('🔄 FIREBASE: Migrating membership to coaching server', uid, coachingId);
+        await setDoc(newMemberRef, {
+          uid,
+          name: userData.name || '',
+          email: userData.email || '',
+          role: oldData.roleInCoaching || userData.role || 'student',
+          membershipStatus: oldData.membershipStatus || 'approved',
+          joinedAt: oldData.joinedAt || serverTimestamp(),
+        });
+      }
 
-    // Create subcollection entry — legacy users are already approved
-    batch.set(memberRef, {
-      coachingId: oldCoachingId,
-      joinedAt: serverTimestamp(),
-      roleInCoaching: userData.role === 'teacher' ? 'teacher' : 'student',
-      membershipStatus: 'approved',
-    });
+      // Migrate leaderboard from old path: leaderboards/{coachingId}/users/{uid}
+      const oldLbRef = doc(db, 'leaderboards', coachingId, 'users', uid);
+      const oldLbSnap = await getDoc(oldLbRef);
+      if (oldLbSnap.exists()) {
+        const newLbRef = doc(db, 'coachings', coachingId, 'leaderboard', uid);
+        const newLbSnap = await getDoc(newLbRef);
+        if (!newLbSnap.exists()) {
+          console.log('🔄 FIREBASE: Migrating leaderboard to coaching server', uid, coachingId);
+          const lbData = oldLbSnap.data();
+          await setDoc(newLbRef, {
+            ...lbData,
+            streak: 0,
+            longestStreak: 0,
+            lastActivityDate: null,
+          });
+        }
+      }
+    }
+
+    // Migrate old userStats to first coaching's leaderboard
+    const oldStatsRef = doc(db, 'userStats', uid);
+    const oldStatsSnap = await getDoc(oldStatsRef);
+    if (oldStatsSnap.exists() && userData.activeCoachingId) {
+      const lbRef = doc(db, 'coachings', userData.activeCoachingId, 'leaderboard', uid);
+      const lbSnap = await getDoc(lbRef);
+      if (lbSnap.exists()) {
+        const statsData = oldStatsSnap.data();
+        const lbData = lbSnap.data();
+        // Only migrate if streak/xp not already set
+        if (!lbData.streak && !lbData.lastActivityDate) {
+          await setDoc(lbRef, {
+            streak: statsData.currentStreak || 0,
+            longestStreak: statsData.longestStreak || 0,
+            lastActivityDate: statsData.lastActivityDate || null,
+          }, { merge: true });
+          console.log('✅ FIREBASE: Migrated userStats to coaching leaderboard', uid);
+        }
+      }
+    }
 
     // Set activeCoachingId if not already set
-    if (!userData.activeCoachingId) {
-      batch.update(userRef, {
-        activeCoachingId: oldCoachingId,
-        updatedAt: serverTimestamp(),
-      });
+    if (!userData.activeCoachingId && oldSnapshot.docs.length > 0) {
+      const firstApproved = oldSnapshot.docs.find(d => d.data().membershipStatus === 'approved');
+      if (firstApproved) {
+        const cid = firstApproved.data().coachingId || firstApproved.id;
+        await setDoc(userRef, {
+          activeCoachingId: cid,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+        console.log('✅ FIREBASE: Set activeCoachingId during migration', uid);
+      }
     }
-
-    await batch.commit();
-    console.log('✅ FIREBASE: Migration complete for user', uid);
-  } else {
-    // Ensure activeCoachingId is set
-    if (!userData.activeCoachingId) {
-      await setDoc(userRef, {
-        activeCoachingId: oldCoachingId,
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-      console.log('✅ FIREBASE: Set activeCoachingId for user', uid);
-    }
+  } catch (err) {
+    console.warn('⚠️ FIREBASE: Migration encountered error (non-blocking):', err);
   }
+
+  console.log('✅ FIREBASE: Migration check complete for', uid);
 };

@@ -43,10 +43,10 @@ const MistakeNotebook = () => {
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
 
   useEffect(() => {
-    if (user) {
+    if (user && coachingId) {
       fetchMistakes();
     }
-  }, [user]);
+  }, [user, coachingId]);
 
   const fetchMistakes = async () => {
     if (!user) return;

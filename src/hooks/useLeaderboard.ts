@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   getLeaderboard,
   subscribeToLeaderboard,
-  updateLeaderboardAfterTest,
   LeaderboardEntry as FirebaseLeaderboardEntry,
 } from '@/lib/firebaseService';
 
@@ -30,7 +29,6 @@ interface LeaderboardData {
   userMonthlyRank: number | null;
 }
 
-// Convert Firebase entry to component format
 const convertEntry = (entry: FirebaseLeaderboardEntry, index: number): LeaderboardEntry => ({
   id: entry.uid,
   user_id: entry.uid,
@@ -45,7 +43,6 @@ const convertEntry = (entry: FirebaseLeaderboardEntry, index: number): Leaderboa
   rank: index + 1,
 });
 
-// Helper functions to get current week/month IDs
 const getCurrentWeekId = (): string => {
   const now = new Date();
   const year = now.getFullYear();
@@ -74,7 +71,6 @@ export const useLeaderboard = () => {
   const [error, setError] = useState<string | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Fetch leaderboard from Firebase
   const fetchLeaderboard = useCallback(async () => {
     if (!user || !coachingId) {
       setLoading(false);
@@ -86,19 +82,17 @@ export const useLeaderboard = () => {
     setError(null);
 
     try {
-      console.log(`📊 FIREBASE: Fetching leaderboard for coaching: ${coachingId}`);
-      
+      console.log(`📊 FIREBASE: Fetching leaderboard from coaching server: ${coachingId}`);
+
       const entries = await getLeaderboard(coachingId);
       const converted = entries.map((entry, index) => convertEntry(entry, index));
-
-      // Find user's rank
       const userEntry = converted.find((e) => e.user_id === user.id);
 
       console.log(`✅ FIREBASE: Loaded ${converted.length} leaderboard entries`);
 
       setData({
         live: converted,
-        weekly: converted, // Firebase uses single leaderboard, UI shows same data
+        weekly: converted,
         monthly: converted,
         userLiveRank: userEntry?.rank || null,
         userWeeklyRank: userEntry?.rank || null,
@@ -112,43 +106,31 @@ export const useLeaderboard = () => {
     }
   }, [user, coachingId]);
 
-  // Update leaderboard after TEST submission (NOT practice)
+  // Leaderboard update is now handled atomically inside saveTestResultAtomic
   const updateLeaderboardForTest = useCallback(
     async (
       correctAnswers: number,
       wrongAnswers: number,
       totalQuestions: number
     ): Promise<boolean> => {
-      if (!user || !coachingId || !profile) {
-        console.error('❌ Cannot update leaderboard: Missing user/coaching/profile');
-        return false;
-      }
-
-      console.log("LEADERBOARD WRITE ATTEMPT", {
-        uid: user.id,
-        coachingId,
-        path: `leaderboards/${coachingId}/users/${user.id}`,
-      });
-
-      try {
-        await updateLeaderboardAfterTest(coachingId, user.id, correctAnswers, wrongAnswers);
-        console.log('✅ FIREBASE: Leaderboard updated successfully');
-        return true;
-      } catch (err: any) {
-        console.error('❌ FIREBASE: Error updating leaderboard:', err);
-        return false;
-      }
+      // No-op: leaderboard is updated atomically in saveTestResultAtomic
+      // Just trigger a refetch
+      await fetchLeaderboard();
+      return true;
     },
-    [user, coachingId, profile]
+    [fetchLeaderboard]
   );
 
-  // Set up real-time subscription
   useEffect(() => {
     fetchLeaderboard();
 
     if (!coachingId) return;
 
-    // Subscribe to real-time updates from Firebase
+    // Cleanup previous subscription
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+    }
+
     unsubscribeRef.current = subscribeToLeaderboard(coachingId, (entries) => {
       const converted = entries.map((entry, index) => convertEntry(entry, index));
       const userEntry = converted.find((e) => e.user_id === user?.id);

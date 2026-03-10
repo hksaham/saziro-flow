@@ -10,9 +10,6 @@ import {
   getOrCreateDailyTest as firebaseGetOrCreateDailyTest,
   getTodayTestResult,
   getTodayPracticeCount,
-  saveTestResult,
-  savePracticeResult,
-  updateUserStatsAfterTest,
 } from '@/lib/firebaseService';
 import type { MCQQuestion, MCQSet } from '@/types/mcq';
 
@@ -42,7 +39,6 @@ export const useDailyTest = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  // Check user's daily test/practice status from Firebase
   const checkDailyStatus = useCallback(async () => {
     if (!user || !coachingId) {
       setLoading(false);
@@ -50,11 +46,11 @@ export const useDailyTest = () => {
     }
 
     try {
-      console.log('🔥 FIREBASE: Checking daily status for', user.id);
+      console.log('🔥 FIREBASE: Checking daily status for', user.id, 'in coaching', coachingId);
 
       const [testResult, practiceCount] = await Promise.all([
         getTodayTestResult(user.id, coachingId),
-        getTodayPracticeCount(user.id),
+        getTodayPracticeCount(user.id, coachingId),
       ]);
 
       setStatus({
@@ -78,7 +74,6 @@ export const useDailyTest = () => {
     }
   }, [user, coachingId]);
 
-  // Get or create daily test for coaching
   const getOrCreateDailyTest = useCallback(async (): Promise<{
     questions: MCQQuestion[];
     dailyTestId: string;
@@ -91,11 +86,10 @@ export const useDailyTest = () => {
     try {
       console.log('🔥 FIREBASE: Getting daily test for coaching', coachingId);
 
-      // Fetch MCQs from Firestore mcq_sets collection
+      // MCQ sets remain global (shared question bank)
       const setsRef = collection(db, 'mcq_sets');
       let setsSnapshot = await getDocs(setsRef);
 
-      // Seed if empty
       if (setsSnapshot.empty) {
         console.log('⚠️ No MCQ sets found, seeding...');
         await seedMCQsToFirestore();
@@ -111,13 +105,11 @@ export const useDailyTest = () => {
         setsSnapshot.docs[0];
       const mcqSet = activeDoc.data() as MCQSet;
 
-      // Get or create daily test record
       const { setId } = await firebaseGetOrCreateDailyTest(
         coachingId,
         mcqSet.questions
       );
 
-      // Convert to legacy format
       const { convertToLegacyFormat } = await import('@/types/mcq');
       const questions = mcqSet.questions
         .slice(0, TEST_QUESTION_LIMIT)
@@ -132,20 +124,19 @@ export const useDailyTest = () => {
     }
   }, [user, coachingId]);
 
-  // Get practice questions
   const getPracticeQuestions = useCallback(async (): Promise<{
     questions: MCQQuestion[];
     setNumber: number;
     error?: string;
   }> => {
-    if (!user) {
+    if (!user || !coachingId) {
       return { questions: [], setNumber: 0, error: 'Not authenticated' };
     }
 
     try {
       console.log('🔥 FIREBASE: Getting practice questions');
 
-      const practiceCount = await getTodayPracticeCount(user.id);
+      const practiceCount = await getTodayPracticeCount(user.id, coachingId);
 
       if (practiceCount >= MAX_PRACTICE_SETS_PER_DAY) {
         return {
@@ -157,7 +148,6 @@ export const useDailyTest = () => {
 
       const nextSetNumber = practiceCount + 1;
 
-      // Fetch MCQs from Firestore
       const setsRef = collection(db, 'mcq_sets');
       let setsSnapshot = await getDocs(setsRef);
 
@@ -177,7 +167,6 @@ export const useDailyTest = () => {
 
       const { convertToLegacyFormat } = await import('@/types/mcq');
 
-      // Pick different questions based on set number for variety
       const startIdx =
         ((nextSetNumber - 1) * PRACTICE_QUESTION_LIMIT) % mcqSet.questions.length;
       const selectedQuestions = [];
@@ -202,17 +191,14 @@ export const useDailyTest = () => {
       console.error('❌ FIREBASE: Error getting practice questions:', err);
       return { questions: [], setNumber: 0, error: err.message };
     }
-  }, [user]);
+  }, [user, coachingId]);
 
-  // Record test attempt completion
   const recordTestAttempt = useCallback(
     async (dailyTestId: string, performanceId: string): Promise<boolean> => {
       if (!user || !coachingId) return false;
 
       try {
         console.log('🔥 FIREBASE: Recording test attempt', dailyTestId);
-        // The test result is already saved via saveTestResult
-        // Just refresh status
         await checkDailyStatus();
         return true;
       } catch (err) {
@@ -223,14 +209,12 @@ export const useDailyTest = () => {
     [user, coachingId, checkDailyStatus]
   );
 
-  // Record practice attempt
   const recordPracticeAttempt = useCallback(
     async (setNumber: number, performanceId: string): Promise<boolean> => {
       if (!user) return false;
 
       try {
         console.log('🔥 FIREBASE: Recording practice attempt', setNumber);
-        // Refresh status
         await checkDailyStatus();
         return true;
       } catch (err) {
@@ -241,9 +225,7 @@ export const useDailyTest = () => {
     [user, checkDailyStatus]
   );
 
-  // Check and reset streak if test was missed
   const checkStreakReset = useCallback(async (): Promise<boolean> => {
-    // This is now handled in updateUserStatsAfterTest
     return false;
   }, []);
 

@@ -33,7 +33,7 @@ interface GroupedMistakes {
 
 const MistakeNotebook = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, coachingId } = useAuth();
   const { t } = useTone();
   const [mistakes, setMistakes] = useState<WrongAnswer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,22 +43,22 @@ const MistakeNotebook = () => {
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
 
   useEffect(() => {
-    if (user) {
+    if (user && coachingId) {
       fetchMistakes();
     }
-  }, [user]);
+  }, [user, coachingId]);
 
   const fetchMistakes = async () => {
-    if (!user) return;
+    if (!user || !coachingId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      console.log('🔥 FIREBASE: Fetching mistakes for user', user.id);
+      console.log('🔥 FIREBASE: Fetching mistakes from coaching server', coachingId);
       
-      // Fetch from Firebase
-      const firebaseMistakes = await getMistakes(user.id, 100);
+      // Fetch from coaching server
+      const firebaseMistakes = await getMistakes(user.id, coachingId, 100);
 
       // Transform Firebase data to match UI format
       const transformedData: WrongAnswer[] = firebaseMistakes.map((item: MistakeEntry & { id?: string }) => ({

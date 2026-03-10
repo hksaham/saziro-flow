@@ -22,7 +22,7 @@ export const useMCQEngine = (
   classId: string = 'class_10',
   subject: string = 'Science',
   chapter: string = 'chapter_1',
-  questionLimit: number = 30 // FIXED: Enforce question limit
+  questionLimit: number = 30
 ) => {
   const [state, setState] = useState<MCQState>({
     questions: [],
@@ -37,55 +37,37 @@ export const useMCQEngine = (
   const [meta, setMeta] = useState<MCQSet['meta'] | null>(null);
   const [setId, setSetId] = useState<string | null>(null);
   
-  // Leaderboard update is now handled atomically inside saveTestResultAtomic
-  // Fetch MCQs from mcq_sets collection (new structure)
   const fetchMCQsFromSets = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     console.log('🔍 MCQ ENGINE: Starting to fetch MCQs from Firestore...');
-    console.log('🔍 Firebase Project: studdy-buddy-bd');
     console.log(`🔍 Question Limit: ${questionLimit}`);
 
     const collectionName = 'mcq_sets';
-    console.log('📁 Firestore read path:', collectionName);
 
     try {
       const setsRef = collection(db, collectionName);
-      console.log(`📁 Querying collection: ${collectionName}`);
 
       let setsSnapshot;
       try {
         setsSnapshot = await getDocs(setsRef);
         console.log(`✅ Read successful. Found ${setsSnapshot.size} documents.`);
-        console.log('📄 Document IDs:', setsSnapshot.docs.map(d => d.id));
       } catch (readError: any) {
-        console.error('❌ FIRESTORE READ FAILED:', {
-          message: readError?.message,
-          code: readError?.code,
-        });
-
         if (readError?.code === 'permission-denied' || readError?.message?.includes('permission')) {
           throw new Error('FIRESTORE PERMISSION DENIED: Firestore Security Rules are blocking READs to mcq_sets.');
         }
         throw readError;
       }
 
-      // If no MCQ sets exist, seed the data
       if (setsSnapshot.empty) {
         console.log('⚠️ No MCQ sets found in Firestore. Attempting to seed from JSON...');
         const result = await seedMCQsToFirestore();
 
         if (!result.success) {
-          console.error('❌ Seeding failed:', result.error);
           throw new Error(result.error || 'Failed to seed MCQs');
         }
 
-        console.log(`✅ Seeded MCQ set: ${result.setId}`);
-
-        // Fetch again after seeding
         const newSnapshot = await getDocs(setsRef);
-        console.log(`📊 After seeding, found ${newSnapshot.size} documents`);
-        console.log('📄 Document IDs (after seed):', newSnapshot.docs.map(d => d.id));
 
         if (newSnapshot.empty) {
           throw new Error('Failed to fetch seeded MCQs - documents not found after seed');
@@ -94,35 +76,22 @@ export const useMCQEngine = (
         const firstDoc = newSnapshot.docs[0];
         const data = firstDoc.data() as MCQSet;
 
-        console.log('🧾 RAW first document:', { id: firstDoc.id, data });
-
         setSetId(firstDoc.id);
         setMeta(data.meta);
 
         const { convertToLegacyFormat } = await import('@/types/mcq');
         let questions: MCQQuestion[] = data.questions.map(q => convertToLegacyFormat(q));
 
-        // FIXED: Enforce question limit
         if (questions.length > questionLimit) {
-          console.log(`📊 Limiting questions from ${questions.length} to ${questionLimit}`);
           questions = questions.slice(0, questionLimit);
         }
 
-        console.log(`✅ Loaded ${questions.length} questions (limit: ${questionLimit})`);
-
-        setState(prev => ({
-          ...prev,
-          questions,
-          loading: false
-        }));
+        setState(prev => ({ ...prev, questions, loading: false }));
         return;
       }
 
-      // Get the first active set
       const activeDoc = setsSnapshot.docs.find(d => (d.data() as any)?.status === 'active') || setsSnapshot.docs[0];
       const data = activeDoc.data() as MCQSet;
-
-      console.log('🧾 RAW active document:', { id: activeDoc.id, data });
 
       setSetId(activeDoc.id);
       setMeta(data.meta);
@@ -130,19 +99,13 @@ export const useMCQEngine = (
       const { convertToLegacyFormat } = await import('@/types/mcq');
       let questions: MCQQuestion[] = data.questions.map(q => convertToLegacyFormat(q));
 
-      // FIXED: Enforce question limit
       if (questions.length > questionLimit) {
-        console.log(`📊 Limiting questions from ${questions.length} to ${questionLimit}`);
         questions = questions.slice(0, questionLimit);
       }
 
-      console.log(`✅ Loaded MCQ set: ${activeDoc.id} with ${questions.length} questions (limit: ${questionLimit})`);
+      console.log(`✅ Loaded MCQ set: ${activeDoc.id} with ${questions.length} questions`);
 
-      setState(prev => ({
-        ...prev,
-        questions,
-        loading: false
-      }));
+      setState(prev => ({ ...prev, questions, loading: false }));
     } catch (err: any) {
       console.error('❌ MCQ ENGINE ERROR:', err);
       setState(prev => ({
@@ -153,13 +116,11 @@ export const useMCQEngine = (
     }
   }, [questionLimit]);
 
-  // Select an option
   const selectOption = useCallback((optionIndex: number) => {
     if (state.answered) return;
     setState(prev => ({ ...prev, selectedOption: optionIndex }));
   }, [state.answered]);
 
-  // Submit answer
   const submitAnswer = useCallback(() => {
     if (state.selectedOption === null || state.answered) return;
     
@@ -176,18 +137,15 @@ export const useMCQEngine = (
     return isCorrect;
   }, [state.selectedOption, state.answered, state.questions, state.currentIndex]);
 
-  // Force submit unanswered (for anti-cheat)
   const forceSubmitUnanswered = useCallback(() => {
     console.log('🚨 FORCE SUBMIT: Marking all remaining questions as wrong');
-    const remaining = state.questions.length - state.totalAnswered;
     setState(prev => ({
       ...prev,
-      totalAnswered: prev.questions.length, // Mark all as answered
+      totalAnswered: prev.questions.length,
       answered: true
     }));
   }, [state.questions.length, state.totalAnswered]);
 
-  // Go to next question
   const nextQuestion = useCallback(() => {
     if (state.currentIndex < state.questions.length - 1) {
       setState(prev => ({
@@ -199,7 +157,6 @@ export const useMCQEngine = (
     }
   }, [state.currentIndex, state.questions.length]);
 
-  // Go to previous question
   const prevQuestion = useCallback(() => {
     if (state.currentIndex > 0) {
       setState(prev => ({
@@ -211,7 +168,6 @@ export const useMCQEngine = (
     }
   }, [state.currentIndex]);
 
-  // Reset quiz
   const resetQuiz = useCallback(() => {
     setState(prev => ({
       ...prev,
@@ -223,7 +179,7 @@ export const useMCQEngine = (
     }));
   }, []);
 
-  // Save performance to Firebase (with mistake tracking)
+  // Save performance — now uses coaching-scoped paths
   const savePerformance = useCallback(async (
     answeredQuestions: AnsweredQuestion[],
     mode: 'test' | 'practice',
@@ -237,11 +193,16 @@ export const useMCQEngine = (
         return { success: false, xpEarned: 0 };
       }
 
-      // Get user's coaching ID from Firebase
+      // Get user's active coaching ID
       const firebaseUser = await getUser(fbUser.uid);
-      const coachingId = firebaseUser?.activeCoachingId || firebaseUser?.coachingId;
+      const coachingId = firebaseUser?.activeCoachingId;
 
-      console.log(`📊 Saving performance for user ${fbUser.uid} to Firebase...`);
+      if (!coachingId) {
+        console.error('❌ Cannot save performance: No active coaching');
+        return { success: false, xpEarned: 0 };
+      }
+
+      console.log(`📊 Saving performance for user ${fbUser.uid} to coaching server ${coachingId}...`);
 
       const correctCount = answeredQuestions.filter(q => q.isCorrect).length;
       const wrongCount = answeredQuestions.filter(q => !q.isCorrect).length;
@@ -250,39 +211,33 @@ export const useMCQEngine = (
       const xpEarned = mode === 'test' ? (correctCount * 10) - (wrongCount * 5) : 0;
       const safeXp = Math.max(0, xpEarned);
 
-      // Save to Firebase based on mode
       if (mode === 'test') {
-        // ATOMIC: saves result + updates leaderboard + updates stats in one batch
-        const atomicResult = await saveTestResultAtomic(fbUser.uid, {
+        // ATOMIC: saves result + updates leaderboard in coaching server
+        const atomicResult = await saveTestResultAtomic(fbUser.uid, coachingId, {
           setId: setId || `test_${Date.now()}`,
-          coachingId: coachingId || '',
           correct: correctCount,
           wrong: wrongCount,
           score: scorePercentage,
           timeTakenSeconds,
         });
-        console.log(`✅ FIREBASE ATOMIC: Test saved: ${correctCount}/${totalQuestions} correct, ${atomicResult.xpEarned} XP earned`);
+        console.log(`✅ FIREBASE ATOMIC: Test saved in coaching server: ${correctCount}/${totalQuestions} correct, ${atomicResult.xpEarned} XP earned`);
       } else {
-        await savePracticeResult(fbUser.uid, {
+        await savePracticeResult(fbUser.uid, coachingId, {
           setId: setId || `practice_${Date.now()}`,
           correct: correctCount,
           wrong: wrongCount,
           score: scorePercentage,
         });
-        console.log(`✅ FIREBASE: Practice performance saved: ${correctCount}/${totalQuestions} correct`);
+        console.log(`✅ FIREBASE: Practice performance saved to coaching server`);
       }
 
       return { success: true, xpEarned: safeXp };
     } catch (err: any) {
-      console.error('❌ Error saving performance:', {
-        message: err?.message,
-        code: err?.code,
-      });
+      console.error('❌ Error saving performance:', err);
       return { success: false, xpEarned: 0 };
     }
   }, [state.questions, meta, setId]);
 
-  // Fetch MCQs on mount
   useEffect(() => {
     fetchMCQsFromSets();
   }, [fetchMCQsFromSets]);

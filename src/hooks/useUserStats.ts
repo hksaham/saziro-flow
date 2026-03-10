@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   getUserStats,
-  updateUserStatsAfterTest,
   getTodayPerformance,
 } from '@/lib/firebaseService';
 
@@ -41,19 +40,18 @@ export const useUserStats = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  // Fetch user stats from Firebase
   const fetchStats = useCallback(async () => {
-    if (!user) {
+    if (!user || !coachingId) {
       setLoading(false);
       return;
     }
 
     try {
-      console.log('🔥 FIREBASE: Fetching user stats', user.id);
+      console.log('🔥 FIREBASE: Fetching user stats from coaching server', user.id, coachingId);
 
       const [firebaseStats, performance] = await Promise.all([
-        getUserStats(user.id),
-        getTodayPerformance(user.id),
+        getUserStats(user.id, coachingId),
+        getTodayPerformance(user.id, coachingId),
       ]);
 
       if (firebaseStats) {
@@ -73,7 +71,7 @@ export const useUserStats = () => {
       }
 
       setTodayPerformance({
-        testAttempts: 0, // Will be calculated from results
+        testAttempts: 0,
         testCorrect: 0,
         testTotal: performance.testTotal,
         testAccuracy: performance.testAccuracy,
@@ -84,7 +82,7 @@ export const useUserStats = () => {
         practiceAccuracy: 0,
       });
 
-      console.log('✅ FIREBASE: User stats loaded');
+      console.log('✅ FIREBASE: User stats loaded from coaching server');
       setLoading(false);
     } catch (err) {
       console.error('❌ FIREBASE: Error fetching stats:', err);
@@ -92,36 +90,27 @@ export const useUserStats = () => {
     }
   }, [user, coachingId]);
 
-  // Update XP and streak ONLY for test completion
-  // STRICT: Practice mode should NEVER call this
+  // Update XP and streak ONLY for test completion — now a no-op since atomic handles it
   const updateStatsForTest = useCallback(
     async (xpEarned: number) => {
-      if (!user) return;
-
-      try {
-        console.log('🔥 FIREBASE: Updating user stats', user.id, `+${xpEarned} XP`);
-        await updateUserStatsAfterTest(user.id, xpEarned);
-
-        // Refresh stats
-        await fetchStats();
-        console.log(`✅ FIREBASE: Test stats updated: +${xpEarned} XP`);
-      } catch (err) {
-        console.error('❌ FIREBASE: Stats update error:', err);
-      }
+      if (!user || !coachingId) return;
+      // Stats are updated atomically in saveTestResultAtomic
+      // Just refresh
+      await fetchStats();
+      console.log(`✅ FIREBASE: Stats refreshed after test: +${xpEarned} XP`);
     },
-    [user, fetchStats]
+    [user, coachingId, fetchStats]
   );
 
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
 
-  // Legacy compatibility - returns combined questions count
   const todayPerformanceLegacy = {
     attempts: todayPerformance.testAttempts + todayPerformance.practiceAttempts,
     totalCorrect: todayPerformance.testCorrect + todayPerformance.practiceCorrect,
     totalQuestions: todayPerformance.testTotal + todayPerformance.practiceTotal,
-    accuracy: todayPerformance.testAccuracy, // Only test accuracy shown
+    accuracy: todayPerformance.testAccuracy,
   };
 
   return {
@@ -141,7 +130,7 @@ export const useUserStats = () => {
       accuracy: todayPerformance.practiceAccuracy,
     },
     loading,
-    updateStats: updateStatsForTest, // Only for test mode
+    updateStats: updateStatsForTest,
     refetch: fetchStats,
   };
 };

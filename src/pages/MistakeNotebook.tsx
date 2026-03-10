@@ -33,7 +33,7 @@ interface GroupedMistakes {
 
 const MistakeNotebook = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, coachingId } = useAuth();
   const { t } = useTone();
   const [mistakes, setMistakes] = useState<WrongAnswer[]>([]);
   const [loading, setLoading] = useState(true);

@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDailyTest } from '@/hooks/useDailyTest';
 import { useUserStats } from '@/hooks/useUserStats';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
-import { saveTestResult, savePracticeResult, saveMistakes } from '@/lib/firebaseService';
+import { saveTestResult, savePracticeResult, saveMistakes, saveTestResultAtomic } from '@/lib/firebaseService';
 import MCQLanding from '@/components/mcq/MCQLanding';
 import MCQTest from '@/components/mcq/MCQTest';
 import MCQCompletion from '@/components/mcq/MCQCompletion';
@@ -39,14 +39,12 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
   const [dailyTestId, setDailyTestId] = useState<string | null>(null);
   const [practiceSetNumber, setPracticeSetNumber] = useState<number>(0);
 
-  // Quiz state
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [totalAnswered, setTotalAnswered] = useState(0);
 
-  // Hooks
   const { updateStats } = useUserStats();
   const { updateLeaderboardForTest } = useLeaderboard();
   const { 
@@ -60,11 +58,9 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     MAX_PRACTICE_SETS_PER_DAY
   } = useDailyTest();
 
-  // Anti-cheat state
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [forceSubmit, setForceSubmit] = useState(false);
 
-  // Load questions based on mode
   useEffect(() => {
     const loadQuestions = async () => {
       if (!user || !coachingId) {
@@ -77,14 +73,12 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
       setError(null);
 
       if (mode === 'test') {
-        // Check if test already taken today
         if (!dailyStatus.canTakeTest) {
           setError('You have already completed today\'s test. Come back tomorrow!');
           setLoading(false);
           return;
         }
 
-        // Get or create daily test
         const result = await getOrCreateDailyTest();
         if (result.error) {
           setError(result.error);
@@ -94,9 +88,7 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
 
         setQuestions(result.questions);
         setDailyTestId(result.dailyTestId);
-        console.log(`📋 Loaded ${result.questions.length} test questions`);
       } else {
-        // Practice mode
         if (!dailyStatus.canTakePractice) {
           setError(`Daily practice limit reached (${MAX_PRACTICE_SETS_PER_DAY}/day). Come back tomorrow!`);
           setLoading(false);
@@ -112,31 +104,26 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
 
         setQuestions(result.questions);
         setPracticeSetNumber(result.setNumber);
-        console.log(`📋 Loaded ${result.questions.length} practice questions (set #${result.setNumber})`);
       }
 
       setLoading(false);
     };
 
-    // Wait for daily status to load first
     if (!dailyStatus.canTakeTest && mode === 'test' && !loading) {
-      // Status loaded and can't take test
     } else {
       loadQuestions();
     }
   }, [user, coachingId, mode, dailyStatus.canTakeTest, dailyStatus.canTakePractice]);
 
-  // ANTI-CHEAT: Tab visibility detection
+  // ANTI-CHEAT
   useEffect(() => {
     if (phase !== 'test') return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        console.log('⚠️ ANTI-CHEAT: Tab switch detected!');
         setTabSwitchCount(prev => {
           const newCount = prev + 1;
           if (newCount >= 3) {
-            console.log('🚨 ANTI-CHEAT: 3 tab switches - forcing submission');
             setForceSubmit(true);
           }
           return newCount;
@@ -155,7 +142,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     const handlePopState = () => {
       if (phase === 'test') {
         window.history.pushState(null, '', window.location.href);
-        console.log('⚠️ ANTI-CHEAT: Back navigation blocked');
       }
     };
 
@@ -171,7 +157,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     };
   }, [phase]);
 
-  // Quiz control functions
   const selectOption = useCallback((optionIndex: number) => {
     if (answered) return;
     setSelectedOption(optionIndex);
@@ -207,7 +192,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
   }, [currentIndex]);
 
   const forceSubmitUnanswered = useCallback(() => {
-    console.log('🚨 FORCE SUBMIT: Marking all remaining questions as wrong');
     setTotalAnswered(questions.length);
     setAnswered(true);
   }, [questions.length]);
@@ -225,7 +209,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     setTestStartTime(0);
   }, []);
 
-  // Track answered questions for review
   const handleQuestionAnswered = useCallback((
     questionIndex: number, 
     selectedOptionIdx: number, 
@@ -243,7 +226,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
   }, []);
 
   const handleStartTest = () => {
-    console.log(`📝 Starting ${mode} with ${questions.length} questions`);
     setTestStartTime(Date.now());
     setPhase('test');
   };
@@ -251,8 +233,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
   const handleTestComplete = async () => {
     const timeTakenSeconds = Math.floor((Date.now() - testStartTime) / 1000);
     const wrongAnswers = answeredQuestions.filter(q => !q.isCorrect);
-    
-    console.log(`📊 ${mode} complete. Score: ${score}/${totalAnswered}. Wrong: ${wrongAnswers.length}. Time: ${timeTakenSeconds}s`);
 
     try {
       const correctCount = answeredQuestions.filter(q => q.isCorrect).length;
@@ -260,35 +240,24 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
       const totalQuestions = answeredQuestions.length;
       const scorePercentage = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
-      // Debug log: after test submit
-      if (mode === 'test' && user?.id && coachingId) {
-        console.log("LEADERBOARD WRITE ATTEMPT", {
-          uid: user.id,
-          coachingId,
-          path: `leaderboards/${coachingId}/users/${user.id}`,
-        });
-      }
-      
-      // XP calculation: TEST = +10 correct, -5 wrong | PRACTICE = 0
       let calculatedXp = 0;
       if (mode === 'test') {
         calculatedXp = (correctCount * 10) - (wrongCount * 5);
-        calculatedXp = Math.max(0, calculatedXp); // Never negative
+        calculatedXp = Math.max(0, calculatedXp);
       }
 
-      // Save performance record to Firebase
-      if (mode === 'test') {
-        const testId = await saveTestResult(user!.id, {
+      if (mode === 'test' && coachingId) {
+        // ATOMIC: saves result + updates leaderboard + streak in coaching server
+        const atomicResult = await saveTestResultAtomic(user!.id, coachingId, {
           setId: dailyTestId || `test_${Date.now()}`,
-          coachingId: coachingId!,
           correct: correctCount,
           wrong: wrongCount,
           score: scorePercentage,
           timeTakenSeconds,
         });
-        console.log('✅ FIREBASE: Saved test result', testId);
+        console.log('✅ FIREBASE ATOMIC: Test saved in coaching server');
 
-        // Save wrong answers to Firebase mistake notebook
+        // Save mistakes to coaching server
         if (wrongAnswers.length > 0) {
           const mistakeRecords = wrongAnswers.map(wa => {
             const question = questions[wa.questionIndex];
@@ -302,35 +271,21 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
               source: 'test' as const,
             };
           });
-          await saveMistakes(user!.id, mistakeRecords);
+          await saveMistakes(user!.id, coachingId, mistakeRecords);
         }
 
-        // Update XP, streak, and leaderboard for TEST ONLY
-        await recordTestAttempt(dailyTestId!, testId);
+        await recordTestAttempt(dailyTestId!, 'atomic');
         await updateStats(calculatedXp);
-        
-        console.log("📊 Updating Firebase leaderboard after test...");
-        const leaderboardSuccess = await updateLeaderboardForTest(
-          correctCount,
-          wrongCount,
-          totalQuestions
-        );
-        console.log("LEADERBOARD WRITE RESULT", {
-          uid: user?.id,
-          coachingId,
-          success: leaderboardSuccess,
-        });
-      } else {
-        // Practice mode - save to Firebase without XP/leaderboard
-        await savePracticeResult(user!.id, {
+        await updateLeaderboardForTest(correctCount, wrongCount, totalQuestions);
+      } else if (coachingId) {
+        // Practice mode — save to coaching server without XP/leaderboard
+        await savePracticeResult(user!.id, coachingId, {
           setId: `practice_${practiceSetNumber}_${Date.now()}`,
           correct: correctCount,
           wrong: wrongCount,
           score: scorePercentage,
         });
-        console.log('✅ FIREBASE: Saved practice result');
 
-        // Save wrong answers to Firebase mistake notebook (practice)
         if (wrongAnswers.length > 0) {
           const mistakeRecords = wrongAnswers.map(wa => {
             const question = questions[wa.questionIndex];
@@ -344,11 +299,10 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
               source: 'practice' as const,
             };
           });
-          await saveMistakes(user!.id, mistakeRecords);
+          await saveMistakes(user!.id, coachingId, mistakeRecords);
         }
 
         await recordPracticeAttempt(practiceSetNumber, `practice_${practiceSetNumber}`);
-        // Practice: NO XP, NO streak update, NO leaderboard update
       }
 
       setXpEarned(calculatedXp);
@@ -368,7 +322,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     setPhase('landing');
   };
 
-  // Build MCQ engine-like object for MCQTest component
   const mcqEngine = {
     questions,
     currentIndex,
@@ -394,7 +347,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     refetch: () => {}
   };
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background bg-pattern">
@@ -411,7 +363,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background bg-pattern">
@@ -431,7 +382,6 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
     );
   }
 
-  // Get question limit based on mode
   const questionLimit = mode === 'test' ? TEST_QUESTION_LIMIT : PRACTICE_QUESTION_LIMIT;
   const maxXp = mode === 'test' ? questionLimit * 10 : 0;
 
@@ -488,18 +438,15 @@ const MCQs = ({ mode = 'test' }: MCQsProps) => {
         />
       )}
 
-      {/* Tab Switch Warning */}
       {tabSwitchCount > 0 && tabSwitchCount < 3 && phase === 'test' && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-warning/90 text-warning-foreground text-sm font-medium animate-fade-in">
           ⚠️ Tab switch detected ({tabSwitchCount}/3). {mode === 'test' ? 'Test' : 'Practice'} will auto-submit after 3 switches.
         </div>
       )}
 
-      {/* Ambient Background Effects */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-primary/3 rounded-full blur-3xl animate-float delay-500" />
-        <div className="absolute top-1/2 left-0 w-64 h-64 bg-primary/4 rounded-full blur-3xl animate-float delay-300" />
+        <div className="absolute bottom-1/3 right-0 w-64 h-64 bg-primary/3 rounded-full blur-3xl animate-float delay-700" />
       </div>
     </div>
   );

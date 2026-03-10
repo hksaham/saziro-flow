@@ -74,7 +74,7 @@ const firebaseUserToProfile = (fbUser: FirebaseUser): Profile => ({
   user_id: fbUser.uid,
   full_name: fbUser.name,
   role: fbUser.role as UserRole,
-  coaching_id: fbUser.activeCoachingId || fbUser.coachingId, // Prefer activeCoachingId
+  coaching_id: fbUser.activeCoachingId || null,
   student_status: fbUser.status as StudentStatus,
   student_class: fbUser.class || null,
   board: fbUser.board || null,

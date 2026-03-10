@@ -78,7 +78,8 @@ const Profile = () => {
 
       try {
         // Fetch today's performance from Firebase
-        const todayPerf = await getTodayPerformance(user.id);
+        const coachId = profile?.coaching_id || '';
+        const todayPerf = await getTodayPerformance(user.id, coachId);
         
         setPerformanceMetrics({
           totalMcqsAttempted: todayPerf.testTotal + todayPerf.practiceTotal,

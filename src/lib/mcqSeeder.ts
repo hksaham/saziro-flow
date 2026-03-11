@@ -87,13 +87,11 @@ export async function seedMCQsToFirestore(coachingId?: string): Promise<{ succes
     const setId = generateSetId(data.meta);
 
     // Determine target path: coaching-scoped or global fallback
-    const collectionPath = coachingId
-      ? `coachings/${coachingId}/mcq_sets`
-      : 'mcq_sets';
+    console.log(`📁 Target: ${coachingId ? `coachings/${coachingId}/mcq_sets` : 'mcq_sets'}/${setId}`);
 
-    console.log(`📁 Target: ${collectionPath}/${setId}`);
-
-    const docRef = doc(db, ...collectionPath.split('/'), setId);
+    const docRef = coachingId
+      ? doc(db, 'coachings', coachingId, 'mcq_sets', setId)
+      : doc(db, 'mcq_sets', setId);
 
     let existingDoc;
     try {

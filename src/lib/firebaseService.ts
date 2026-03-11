@@ -104,7 +104,6 @@ export interface UserStats {
   lastActivityDate: string | null;
 }
 
-// Legacy compat type for CoachingSwitcher/ManageCoachings
 export interface CoachingMembership {
   coachingId: string;
   joinedAt: Timestamp;
@@ -140,15 +139,27 @@ export const createUser = async (
     createdAt: serverTimestamp(),
   });
 
-  // Create membership inside coaching server
+  // Create membership inside coaching server + user's coaching subcollection
   if (data.coachingId) {
+    const membershipStatus = data.role === 'student' ? 'pending' : 'approved';
+
+    // Server-side membership: coachings/{coachingId}/members/{uid}
     const memberRef = doc(db, 'coachings', data.coachingId, 'members', uid);
     batch.set(memberRef, {
       uid,
       name: data.name,
       email: data.email,
       role: data.role,
-      membershipStatus: data.role === 'student' ? 'pending' : 'approved',
+      membershipStatus,
+      joinedAt: serverTimestamp(),
+    });
+
+    // User-side reference: users/{uid}/coachings/{coachingId}
+    const userCoachingRef = doc(db, 'users', uid, 'coachings', data.coachingId);
+    batch.set(userCoachingRef, {
+      coachingId: data.coachingId,
+      role: data.role,
+      membershipStatus,
       joinedAt: serverTimestamp(),
     });
   }
@@ -190,7 +201,6 @@ export const getPendingStudents = async (
   const q = query(membersRef, where('membershipStatus', '==', 'pending'));
   const snapshot = await getDocs(q);
 
-  // Fetch full user data for each pending member
   const pendingUsers: FirebaseUser[] = [];
   for (const memberDoc of snapshot.docs) {
     const uid = memberDoc.id;
@@ -235,6 +245,15 @@ export const approveStudent = async (
     joinedAt: serverTimestamp(),
   }, { merge: true });
 
+  // Sync user-side coaching reference
+  const userCoachingRef = doc(db, 'users', uid, 'coachings', coachingId);
+  batch.set(userCoachingRef, {
+    coachingId,
+    role: 'student',
+    membershipStatus: 'approved',
+    joinedAt: serverTimestamp(),
+  }, { merge: true });
+
   // Create leaderboard entry inside coaching server
   const leaderboardRef = doc(db, 'coachings', coachingId, 'leaderboard', uid);
   batch.set(leaderboardRef, {
@@ -271,6 +290,12 @@ export const rejectStudent = async (uid: string, coachingId?: string): Promise<v
     batch.set(memberRef, {
       membershipStatus: 'rejected',
     }, { merge: true });
+
+    // Sync user-side
+    const userCoachingRef = doc(db, 'users', uid, 'coachings', coachingId);
+    batch.set(userCoachingRef, {
+      membershipStatus: 'rejected',
+    }, { merge: true });
   }
 
   await batch.commit();
@@ -289,7 +314,9 @@ export const createCoaching = async (
   const coachingRef = doc(collection(db, 'coachings'));
   const inviteToken = generateInviteToken();
 
-  await setDoc(coachingRef, {
+  const batch = writeBatch(db);
+
+  batch.set(coachingRef, {
     coachingId: coachingRef.id,
     name,
     teacherUid,
@@ -297,6 +324,27 @@ export const createCoaching = async (
     createdAt: serverTimestamp(),
   });
 
+  // Teacher is also a member of their own coaching
+  const memberRef = doc(db, 'coachings', coachingRef.id, 'members', teacherUid);
+  batch.set(memberRef, {
+    uid: teacherUid,
+    name: '',
+    email: '',
+    role: 'teacher',
+    membershipStatus: 'approved',
+    joinedAt: serverTimestamp(),
+  });
+
+  // User-side coaching reference
+  const userCoachingRef = doc(db, 'users', teacherUid, 'coachings', coachingRef.id);
+  batch.set(userCoachingRef, {
+    coachingId: coachingRef.id,
+    role: 'teacher',
+    membershipStatus: 'approved',
+    joinedAt: serverTimestamp(),
+  });
+
+  await batch.commit();
   console.log('✅ FIREBASE: Created coaching', coachingRef.id);
   return coachingRef.id;
 };
@@ -328,6 +376,28 @@ const generateInviteToken = (): string => {
 };
 
 // ============================================
+// MEMBERSHIP VERIFICATION
+// ============================================
+
+/**
+ * Check if a user has approved membership in a coaching server.
+ * Used to gate access to coaching-scoped features.
+ */
+export const checkApprovedMembership = async (
+  uid: string,
+  coachingId: string
+): Promise<boolean> => {
+  try {
+    const memberRef = doc(db, 'coachings', coachingId, 'members', uid);
+    const memberSnap = await getDoc(memberRef);
+    if (!memberSnap.exists()) return false;
+    return memberSnap.data()?.membershipStatus === 'approved';
+  } catch {
+    return false;
+  }
+};
+
+// ============================================
 // LEADERBOARD OPERATIONS (Server-scoped)
 // Path: coachings/{coachingId}/leaderboard/{uid}
 // ============================================
@@ -335,10 +405,7 @@ const generateInviteToken = (): string => {
 export const getLeaderboard = async (
   coachingId: string
 ): Promise<LeaderboardEntry[]> => {
-  console.log('LEADERBOARD READ', {
-    coachingId,
-    queryPath: `coachings/${coachingId}/leaderboard`,
-  });
+  console.log('📊 LEADERBOARD READ:', `coachings/${coachingId}/leaderboard`);
 
   const leaderboardRef = collection(db, 'coachings', coachingId, 'leaderboard');
   const q = query(
@@ -349,8 +416,7 @@ export const getLeaderboard = async (
   );
   const snapshot = await getDocs(q);
 
-  console.log('LEADERBOARD SNAPSHOT SIZE', snapshot.size);
-
+  console.log('📊 LEADERBOARD SIZE:', snapshot.size);
   return snapshot.docs.map((doc) => doc.data() as LeaderboardEntry);
 };
 
@@ -367,7 +433,7 @@ export const subscribeToLeaderboard = (
   );
 
   return onSnapshot(q, (snapshot) => {
-    console.log('🔴 FIREBASE LEADERBOARD REALTIME UPDATE:', snapshot.size, 'entries');
+    console.log('🔴 LEADERBOARD REALTIME:', snapshot.size, 'entries');
     const entries = snapshot.docs.map((doc) => doc.data() as LeaderboardEntry);
     callback(entries);
   });
@@ -375,8 +441,7 @@ export const subscribeToLeaderboard = (
 
 // ============================================
 // USER STATS OPERATIONS (Server-scoped)
-// Stats are now stored in coachings/{coachingId}/leaderboard/{uid}
-// No separate userStats collection needed
+// Stats live in coachings/{coachingId}/leaderboard/{uid}
 // ============================================
 
 export const getUserStats = async (uid: string, coachingId: string): Promise<UserStats | null> => {
@@ -401,7 +466,6 @@ export const updateUserStatsAfterTest = async (
   xpEarned: number
 ): Promise<void> => {
   // Stats are updated atomically in saveTestResultAtomic
-  // This function is kept for compatibility but delegates to the leaderboard entry
   console.log('✅ FIREBASE: Stats update handled by atomic test save');
 };
 
@@ -600,7 +664,6 @@ export const saveTestResultAtomic = async (
       );
       if (daysDiff === 1) newStreak = (current.streak ?? 0) + 1;
       else if (daysDiff > 1) newStreak = 1;
-      // daysDiff === 0: keep same streak
     } else {
       newStreak = 1;
     }
@@ -624,7 +687,73 @@ export const saveTestResultAtomic = async (
 };
 
 // ============================================
-// DAILY TEST OPERATIONS
+// MCQ SETS OPERATIONS (Server-scoped)
+// Path: coachings/{coachingId}/mcq_sets/{setId}
+// ============================================
+
+/**
+ * Get MCQ sets for a coaching. Falls back to global mcq_sets if none found
+ * in the coaching (for backward compatibility during migration).
+ */
+export const getCoachingMCQSets = async (coachingId: string): Promise<{ docs: any[]; fromGlobal: boolean }> => {
+  // First try coaching-scoped MCQ sets
+  const coachingSetsRef = collection(db, 'coachings', coachingId, 'mcq_sets');
+  const coachingSnapshot = await getDocs(coachingSetsRef);
+
+  if (!coachingSnapshot.empty) {
+    console.log(`📋 FIREBASE: Found ${coachingSnapshot.size} MCQ sets in coaching server ${coachingId}`);
+    return { docs: coachingSnapshot.docs, fromGlobal: false };
+  }
+
+  // Fallback: check global mcq_sets (legacy)
+  console.log('⚠️ FIREBASE: No coaching-scoped MCQ sets, falling back to global mcq_sets');
+  const globalSetsRef = collection(db, 'mcq_sets');
+  const globalSnapshot = await getDocs(globalSetsRef);
+  return { docs: globalSnapshot.docs, fromGlobal: true };
+};
+
+/**
+ * Seed MCQ sets into a coaching server from the global mcq_sets or JSON.
+ */
+export const seedCoachingMCQSets = async (coachingId: string): Promise<boolean> => {
+  try {
+    // Check if coaching already has MCQ sets
+    const coachingSetsRef = collection(db, 'coachings', coachingId, 'mcq_sets');
+    const existingSnapshot = await getDocs(coachingSetsRef);
+    if (!existingSnapshot.empty) {
+      console.log('✅ FIREBASE: Coaching already has MCQ sets');
+      return true;
+    }
+
+    // Try to copy from global mcq_sets
+    const globalSetsRef = collection(db, 'mcq_sets');
+    const globalSnapshot = await getDocs(globalSetsRef);
+
+    if (!globalSnapshot.empty) {
+      const batch = writeBatch(db);
+      for (const globalDoc of globalSnapshot.docs) {
+        const newDocRef = doc(db, 'coachings', coachingId, 'mcq_sets', globalDoc.id);
+        batch.set(newDocRef, {
+          ...globalDoc.data(),
+          coachingId,
+          copiedAt: serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      console.log(`✅ FIREBASE: Copied ${globalSnapshot.size} MCQ sets to coaching ${coachingId}`);
+      return true;
+    }
+
+    return false;
+  } catch (err) {
+    console.error('❌ FIREBASE: Error seeding coaching MCQ sets:', err);
+    return false;
+  }
+};
+
+// ============================================
+// DAILY TEST OPERATIONS (Server-scoped)
+// Path: coachings/{coachingId}/tests/{testId}
 // ============================================
 
 export const getOrCreateDailyTest = async (
@@ -634,16 +763,17 @@ export const getOrCreateDailyTest = async (
   const today = new Date().toISOString().split('T')[0];
   const setId = `${coachingId}_${today}`;
 
-  const testRef = doc(db, 'mcq_sets', setId);
+  // Store daily tests inside coaching server
+  const testRef = doc(db, 'coachings', coachingId, 'tests', setId);
   const testSnap = await getDoc(testRef);
 
   if (testSnap.exists()) {
     const data = testSnap.data();
-    console.log('📋 FIREBASE: Found existing daily test', setId);
+    console.log('📋 FIREBASE: Found existing daily test in coaching server', setId);
     return { setId, questionIds: data.questionIds || [] };
   }
 
-  // Create new daily test
+  // Create new daily test inside coaching server
   const questionIds = questions.slice(0, 30).map((_, idx) => `q_${idx}`);
   await setDoc(testRef, {
     type: 'test',
@@ -653,12 +783,13 @@ export const getOrCreateDailyTest = async (
     createdAt: serverTimestamp(),
   });
 
-  console.log('✅ FIREBASE: Created daily test', setId);
+  console.log('✅ FIREBASE: Created daily test in coaching server', setId);
   return { setId, questionIds };
 };
 
 // ============================================
 // PERFORMANCE DASHBOARD (Server-scoped)
+// Path: coachings/{coachingId}/results
 // ============================================
 
 export const getTodayPerformance = async (
@@ -704,17 +835,17 @@ export const getTodayPerformance = async (
 
 /**
  * Get all coaching memberships for a user.
- * Reads from users/{uid}/coachings subcollection first (legacy path),
+ * Reads from users/{uid}/coachings subcollection,
  * then verifies each membership in the coaching server.
  */
 export const getUserCoachings = async (uid: string): Promise<CoachingMembership[]> => {
   console.log('🔥 FIREBASE: Fetching coachings for user', uid);
 
-  // Step 1: Read from users/{uid}/coachings (legacy subcollection)
+  // Read from users/{uid}/coachings
   const userCoachingsRef = collection(db, 'users', uid, 'coachings');
   const snapshot = await getDocs(userCoachingsRef);
 
-  console.log('📋 FIREBASE: Found', snapshot.size, 'coaching memberships in user subcollection');
+  console.log('📋 FIREBASE: Found', snapshot.size, 'coaching references in user subcollection');
 
   const memberships: CoachingMembership[] = [];
 
@@ -722,7 +853,7 @@ export const getUserCoachings = async (uid: string): Promise<CoachingMembership[
     const data = d.data();
     const coachingId = data.coachingId || d.id;
 
-    // Also check the server-style membership for the latest status
+    // Verify against coaching server for latest status
     let membershipStatus = data.membershipStatus || 'pending';
     try {
       const serverMemberRef = doc(db, 'coachings', coachingId, 'members', uid);
@@ -731,7 +862,7 @@ export const getUserCoachings = async (uid: string): Promise<CoachingMembership[
         membershipStatus = serverSnap.data()?.membershipStatus || membershipStatus;
       }
     } catch (e) {
-      // Fall back to the subcollection status
+      // Fall back to user-side status
     }
 
     console.log('  → Coaching', coachingId, 'status:', membershipStatus);
@@ -748,7 +879,7 @@ export const getUserCoachings = async (uid: string): Promise<CoachingMembership[
 };
 
 /**
- * Add a coaching membership for a user (creates member in coaching server)
+ * Add a coaching membership for a user (creates member in coaching server + user subcollection)
  */
 export const addUserCoaching = async (
   uid: string,
@@ -757,62 +888,74 @@ export const addUserCoaching = async (
 ): Promise<{ alreadyExists: boolean; status?: string }> => {
   const memberRef = doc(db, 'coachings', coachingId, 'members', uid);
   const snap = await getDoc(memberRef);
+
   if (!snap.exists()) {
+    const batch = writeBatch(db);
     const userData = await getUser(uid);
-    await setDoc(memberRef, {
+    const membershipStatus = role === 'student' ? 'pending' : 'approved';
+
+    // Server-side membership
+    batch.set(memberRef, {
       uid,
       name: userData?.name || '',
       email: userData?.email || '',
       role,
-      membershipStatus: role === 'student' ? 'pending' : 'approved',
+      membershipStatus,
       joinedAt: serverTimestamp(),
     });
-    console.log('✅ FIREBASE: Added member to coaching server (pending)', coachingId, 'for user', uid);
+
+    // User-side coaching reference
+    const userCoachingRef = doc(db, 'users', uid, 'coachings', coachingId);
+    batch.set(userCoachingRef, {
+      coachingId,
+      role,
+      membershipStatus,
+      joinedAt: serverTimestamp(),
+    });
+
+    await batch.commit();
+    console.log('✅ FIREBASE: Added member to coaching server + user subcollection', coachingId);
     return { alreadyExists: false };
   } else {
     const data = snap.data();
-    console.log('ℹ️ FIREBASE: Membership already exists in coaching server', coachingId, 'for user', uid);
+    console.log('ℹ️ FIREBASE: Membership already exists', coachingId);
     return { alreadyExists: true, status: data?.membershipStatus };
   }
 };
 
 /**
- * Switch active coaching for a user (verifies membership in coaching server)
+ * Switch active coaching for a user (verifies approved membership)
  */
 export const switchActiveCoaching = async (
   uid: string,
   coachingId: string
 ): Promise<{ success: boolean; error?: string }> => {
-  // Verify membership exists in coaching server
   const memberRef = doc(db, 'coachings', coachingId, 'members', uid);
   const memberSnap = await getDoc(memberRef);
 
   if (!memberSnap.exists()) {
-    console.error('❌ FIREBASE: User is not a member of coaching server', coachingId);
+    console.error('❌ FIREBASE: User is not a member of coaching', coachingId);
     return { success: false, error: 'Not a member of this coaching' };
   }
 
   const memberData = memberSnap.data();
   if (memberData?.membershipStatus !== 'approved') {
-    console.error('❌ FIREBASE: Membership not approved in coaching server', coachingId);
+    console.error('❌ FIREBASE: Membership not approved', coachingId);
     return { success: false, error: 'Membership not yet approved' };
   }
 
-  // Update activeCoachingId on global user
   const userRef = doc(db, 'users', uid);
   await setDoc(userRef, {
     activeCoachingId: coachingId,
     updatedAt: serverTimestamp(),
   }, { merge: true });
 
-  console.log('✅ FIREBASE: Switched active coaching to', coachingId, 'for user', uid);
+  console.log('✅ FIREBASE: Switched active coaching to', coachingId);
   return { success: true };
 };
 
 /**
  * Migrate existing user from old structure to server-style architecture.
- * Moves data from users/{uid}/coachings/{coachingId} to coachings/{coachingId}/members/{uid}
- * and from leaderboards/{coachingId}/users/{uid} to coachings/{coachingId}/leaderboard/{uid}
  */
 export const migrateUserCoachings = async (uid: string): Promise<void> => {
   const userRef = doc(db, 'users', uid);
@@ -822,7 +965,6 @@ export const migrateUserCoachings = async (uid: string): Promise<void> => {
 
   const userData = userSnap.data() as any;
 
-  // Migrate from old subcollection structure: users/{uid}/coachings/{coachingId}
   try {
     const oldCoachingsRef = collection(db, 'users', uid, 'coachings');
     const oldSnapshot = await getDocs(oldCoachingsRef);
@@ -831,7 +973,7 @@ export const migrateUserCoachings = async (uid: string): Promise<void> => {
       const oldData = oldDoc.data();
       const coachingId = oldData.coachingId || oldDoc.id;
 
-      // Check if already migrated to server model
+      // Ensure server-side membership exists
       const newMemberRef = doc(db, 'coachings', coachingId, 'members', uid);
       const newMemberSnap = await getDoc(newMemberRef);
 
@@ -841,13 +983,22 @@ export const migrateUserCoachings = async (uid: string): Promise<void> => {
           uid,
           name: userData.name || '',
           email: userData.email || '',
-          role: oldData.roleInCoaching || userData.role || 'student',
+          role: oldData.roleInCoaching || oldData.role || userData.role || 'student',
           membershipStatus: oldData.membershipStatus || 'approved',
           joinedAt: oldData.joinedAt || serverTimestamp(),
         });
       }
 
-      // Migrate leaderboard from old path: leaderboards/{coachingId}/users/{uid}
+      // Ensure user-side coaching reference has coachingId field
+      const userCoachingRef = doc(db, 'users', uid, 'coachings', coachingId);
+      await setDoc(userCoachingRef, {
+        coachingId,
+        role: oldData.roleInCoaching || oldData.role || userData.role || 'student',
+        membershipStatus: oldData.membershipStatus || 'approved',
+        joinedAt: oldData.joinedAt || serverTimestamp(),
+      }, { merge: true });
+
+      // Migrate leaderboard from old path
       const oldLbRef = doc(db, 'leaderboards', coachingId, 'users', uid);
       const oldLbSnap = await getDoc(oldLbRef);
       if (oldLbSnap.exists()) {
@@ -864,6 +1015,9 @@ export const migrateUserCoachings = async (uid: string): Promise<void> => {
           });
         }
       }
+
+      // Migrate global MCQ sets to this coaching if needed
+      await seedCoachingMCQSets(coachingId);
     }
 
     // Migrate old userStats to first coaching's leaderboard
@@ -875,7 +1029,6 @@ export const migrateUserCoachings = async (uid: string): Promise<void> => {
       if (lbSnap.exists()) {
         const statsData = oldStatsSnap.data();
         const lbData = lbSnap.data();
-        // Only migrate if streak/xp not already set
         if (!lbData.streak && !lbData.lastActivityDate) {
           await setDoc(lbRef, {
             streak: statsData.currentStreak || 0,
@@ -889,7 +1042,9 @@ export const migrateUserCoachings = async (uid: string): Promise<void> => {
 
     // Set activeCoachingId if not already set
     if (!userData.activeCoachingId && oldSnapshot.docs.length > 0) {
-      const firstApproved = oldSnapshot.docs.find(d => d.data().membershipStatus === 'approved');
+      const firstApproved = oldSnapshot.docs.find(d =>
+        (d.data().membershipStatus === 'approved')
+      );
       if (firstApproved) {
         const cid = firstApproved.data().coachingId || firstApproved.id;
         await setDoc(userRef, {

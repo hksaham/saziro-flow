@@ -703,25 +703,48 @@ export const getTodayPerformance = async (
 // ============================================
 
 /**
- * Get all coaching memberships for a user by scanning coaching servers
+ * Get all coaching memberships for a user.
+ * Reads from users/{uid}/coachings subcollection first (legacy path),
+ * then verifies each membership in the coaching server.
  */
 export const getUserCoachings = async (uid: string): Promise<CoachingMembership[]> => {
-  // Use collectionGroup query across all members subcollections
-  const membersGroup = collectionGroup(db, 'members');
-  const q = query(membersGroup, where('uid', '==', uid));
-  const snapshot = await getDocs(q);
+  console.log('🔥 FIREBASE: Fetching coachings for user', uid);
 
-  return snapshot.docs.map((d) => {
+  // Step 1: Read from users/{uid}/coachings (legacy subcollection)
+  const userCoachingsRef = collection(db, 'users', uid, 'coachings');
+  const snapshot = await getDocs(userCoachingsRef);
+
+  console.log('📋 FIREBASE: Found', snapshot.size, 'coaching memberships in user subcollection');
+
+  const memberships: CoachingMembership[] = [];
+
+  for (const d of snapshot.docs) {
     const data = d.data();
-    // Extract coachingId from the path: coachings/{coachingId}/members/{uid}
-    const coachingId = d.ref.parent.parent?.id || '';
-    return {
+    const coachingId = data.coachingId || d.id;
+
+    // Also check the server-style membership for the latest status
+    let membershipStatus = data.membershipStatus || 'pending';
+    try {
+      const serverMemberRef = doc(db, 'coachings', coachingId, 'members', uid);
+      const serverSnap = await getDoc(serverMemberRef);
+      if (serverSnap.exists()) {
+        membershipStatus = serverSnap.data()?.membershipStatus || membershipStatus;
+      }
+    } catch (e) {
+      // Fall back to the subcollection status
+    }
+
+    console.log('  → Coaching', coachingId, 'status:', membershipStatus);
+
+    memberships.push({
       coachingId,
       joinedAt: data.joinedAt,
       roleInCoaching: data.role || 'student',
-      membershipStatus: data.membershipStatus,
-    } as CoachingMembership;
-  });
+      membershipStatus,
+    } as CoachingMembership);
+  }
+
+  return memberships;
 };
 
 /**

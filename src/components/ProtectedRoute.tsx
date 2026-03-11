@@ -16,7 +16,7 @@ const ProtectedRoute = ({
   requireOnboarded = true,
   allowedRoles,
 }: ProtectedRouteProps) => {
-  const { user, profile, loading, isPending, isOnboarded, isStudent } = useAuth();
+  const { user, profile, loading, isPending, isOnboarded, isStudent, coachingId } = useAuth();
 
   if (loading) {
     return (
@@ -62,6 +62,23 @@ const ProtectedRoute = ({
   // Check role restrictions
   if (allowedRoles && profile.role && !allowedRoles.includes(profile.role)) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  // Student must have an active coaching (approved membership verified by AuthContext)
+  if (isStudent && requireApproved && !coachingId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background bg-pattern">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <h2 className="text-xl font-semibold text-foreground mb-2">No Coaching Joined</h2>
+          <p className="text-muted-foreground">
+            You have not joined any coaching yet. Ask your teacher for an invite link.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;

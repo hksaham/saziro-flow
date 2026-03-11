@@ -1,15 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  collection,
-  getDocs,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { seedMCQsToFirestore } from '@/lib/mcqSeeder';
 import {
   getOrCreateDailyTest as firebaseGetOrCreateDailyTest,
   getTodayTestResult,
   getTodayPracticeCount,
+  getCoachingMCQSets,
+  seedCoachingMCQSets,
 } from '@/lib/firebaseService';
 import type { MCQQuestion, MCQSet } from '@/types/mcq';
 
@@ -74,6 +71,35 @@ export const useDailyTest = () => {
     }
   }, [user, coachingId]);
 
+  /**
+   * Load MCQ sets from coaching server: coachings/{coachingId}/mcq_sets
+   * Falls back to global mcq_sets and copies to coaching if needed.
+   */
+  const loadCoachingMCQSet = useCallback(async (): Promise<MCQSet | null> => {
+    if (!coachingId) return null;
+
+    let { docs, fromGlobal } = await getCoachingMCQSets(coachingId);
+
+    if (docs.length === 0) {
+      console.log('⚠️ No MCQ sets found, seeding to coaching...');
+      await seedMCQsToFirestore(coachingId);
+      const retry = await getCoachingMCQSets(coachingId);
+      docs = retry.docs;
+      fromGlobal = retry.fromGlobal;
+    }
+
+    if (docs.length === 0) return null;
+
+    // Copy global sets to coaching for future use
+    if (fromGlobal) {
+      await seedCoachingMCQSets(coachingId);
+    }
+
+    const activeDoc =
+      docs.find((d) => (d.data() as any)?.status === 'active') || docs[0];
+    return activeDoc.data() as MCQSet;
+  }, [coachingId]);
+
   const getOrCreateDailyTest = useCallback(async (): Promise<{
     questions: MCQQuestion[];
     dailyTestId: string;
@@ -86,43 +112,26 @@ export const useDailyTest = () => {
     try {
       console.log('🔥 FIREBASE: Getting daily test for coaching', coachingId);
 
-      // MCQ sets remain global (shared question bank)
-      const setsRef = collection(db, 'mcq_sets');
-      let setsSnapshot = await getDocs(setsRef);
-
-      if (setsSnapshot.empty) {
-        console.log('⚠️ No MCQ sets found, seeding...');
-        await seedMCQsToFirestore();
-        setsSnapshot = await getDocs(setsRef);
-      }
-
-      if (setsSnapshot.empty) {
+      const mcqSet = await loadCoachingMCQSet();
+      if (!mcqSet) {
         return { questions: [], dailyTestId: '', error: 'No MCQ sets available' };
       }
 
-      const activeDoc =
-        setsSnapshot.docs.find((d) => (d.data() as any)?.status === 'active') ||
-        setsSnapshot.docs[0];
-      const mcqSet = activeDoc.data() as MCQSet;
-
-      const { setId } = await firebaseGetOrCreateDailyTest(
-        coachingId,
-        mcqSet.questions
-      );
+      // Create/get daily test inside coaching server: coachings/{coachingId}/tests
+      const { setId } = await firebaseGetOrCreateDailyTest(coachingId, mcqSet.questions);
 
       const { convertToLegacyFormat } = await import('@/types/mcq');
       const questions = mcqSet.questions
         .slice(0, TEST_QUESTION_LIMIT)
         .map((q) => convertToLegacyFormat(q));
 
-      console.log(`✅ FIREBASE: Loaded ${questions.length} test questions`);
-
+      console.log(`✅ FIREBASE: Loaded ${questions.length} test questions from coaching server`);
       return { questions, dailyTestId: setId };
     } catch (err: any) {
       console.error('❌ FIREBASE: Error in getOrCreateDailyTest:', err);
       return { questions: [], dailyTestId: '', error: err.message };
     }
-  }, [user, coachingId]);
+  }, [user, coachingId, loadCoachingMCQSet]);
 
   const getPracticeQuestions = useCallback(async (): Promise<{
     questions: MCQQuestion[];
@@ -134,7 +143,7 @@ export const useDailyTest = () => {
     }
 
     try {
-      console.log('🔥 FIREBASE: Getting practice questions');
+      console.log('🔥 FIREBASE: Getting practice questions from coaching server');
 
       const practiceCount = await getTodayPracticeCount(user.id, coachingId);
 
@@ -148,22 +157,10 @@ export const useDailyTest = () => {
 
       const nextSetNumber = practiceCount + 1;
 
-      const setsRef = collection(db, 'mcq_sets');
-      let setsSnapshot = await getDocs(setsRef);
-
-      if (setsSnapshot.empty) {
-        await seedMCQsToFirestore();
-        setsSnapshot = await getDocs(setsRef);
-      }
-
-      if (setsSnapshot.empty) {
+      const mcqSet = await loadCoachingMCQSet();
+      if (!mcqSet) {
         return { questions: [], setNumber: 0, error: 'No MCQ sets available' };
       }
-
-      const activeDoc =
-        setsSnapshot.docs.find((d) => (d.data() as any)?.status === 'active') ||
-        setsSnapshot.docs[0];
-      const mcqSet = activeDoc.data() as MCQSet;
 
       const { convertToLegacyFormat } = await import('@/types/mcq');
 
@@ -183,7 +180,7 @@ export const useDailyTest = () => {
       const questions = selectedQuestions.map((q) => convertToLegacyFormat(q));
 
       console.log(
-        `✅ FIREBASE: Loaded ${questions.length} practice questions (set #${nextSetNumber})`
+        `✅ FIREBASE: Loaded ${questions.length} practice questions from coaching server (set #${nextSetNumber})`
       );
 
       return { questions, setNumber: nextSetNumber };
@@ -191,7 +188,7 @@ export const useDailyTest = () => {
       console.error('❌ FIREBASE: Error getting practice questions:', err);
       return { questions: [], setNumber: 0, error: err.message };
     }
-  }, [user, coachingId]);
+  }, [user, coachingId, loadCoachingMCQSet]);
 
   const recordTestAttempt = useCallback(
     async (dailyTestId: string, performanceId: string): Promise<boolean> => {

@@ -127,7 +127,7 @@ export async function seedMCQsToFirestore(coachingId?: string): Promise<{ succes
       throw writeError;
     }
 
-    console.log(`✅ MCQ set seeded: ${setId} → ${collectionPath}`);
+    console.log(`✅ MCQ set seeded: ${setId} → ${coachingId ? `coachings/${coachingId}/mcq_sets` : 'mcq_sets'}`);
     return { success: true, setId };
   } catch (error: any) {
     console.error('❌ FATAL ERROR seeding MCQs:', error);

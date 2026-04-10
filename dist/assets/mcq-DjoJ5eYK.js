@@ -1,0 +1,1 @@
+function i(o){const n=Object.keys(o.options).sort(),c=n.map(t=>o.options[t]),r=n.indexOf(o.correctAnswer);return{id:o.id,question:o.question,options:c,correctIndex:r,explanation:o.explanation,difficulty:"medium"}}export{i as convertToLegacyFormat};

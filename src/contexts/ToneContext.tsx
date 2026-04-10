@@ -58,7 +58,7 @@ interface ToneTexts {
 
 const toneTexts: Record<ToneType, ToneTexts> = {
   'chill-bro': {
-    welcome: 'Yo! Study Buddy te Welcome! 🔥',
+    welcome: 'Yo! SAZIRO FLOW te Welcome! 🔥',
     pendingApproval: 'Bro, Wait Koro! ⏳',
     pendingDescription: 'Tomar teacher tomar request ta dekhe approve korbe. Chill koro, notification ashbe! 😎',
     login: 'Do Login Bro',
@@ -109,7 +109,7 @@ const toneTexts: Record<ToneType, ToneTexts> = {
     noNotifications: 'Kono notification nai ekhon',
   },
   'friendly-banglish': {
-    welcome: 'Study Buddy te Swagotom! 🎓',
+    welcome: 'SAZIRO FLOW te Swagotom! 🎓',
     pendingApproval: 'Approval Pending! ⏳',
     pendingDescription: 'Apnar teacher apnar request ta review korchen. Kindly wait korun, approval pele notification paben! 🙂',
     login: 'Login Korun',

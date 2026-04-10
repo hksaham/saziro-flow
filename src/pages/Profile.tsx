@@ -509,7 +509,7 @@ const Profile = () => {
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   <span className="font-medium text-foreground">Anti-cheat system is active.</span>{' '}
                   Suspicious activity may result in streak resets and XP deductions. 
-                  Play fair, study smart.
+                  Play fair, Saziro Flow smart.
                 </p>
               </div>
             </div>

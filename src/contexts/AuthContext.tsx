@@ -17,6 +17,9 @@ import {
   switchActiveCoaching as firebaseSwitchCoaching,
   getUserCoachings,
   FirebaseUser,
+  ClassLevel,
+  GroupType,
+  TonePreference,
 } from '@/lib/firebaseService';
 
 type UserRole = 'teacher' | 'student' | null;
@@ -52,7 +55,15 @@ interface AuthContextType {
   isPending: boolean;
   isOnboarded: boolean;
   coachingId: string | null;
-  signUp: (email: string, password: string, fullName: string, role: 'teacher' | 'student', coachingName?: string, inviteToken?: string) => Promise<{ error: string | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    role: 'teacher' | 'student',
+    coachingName?: string,
+    inviteToken?: string,
+    shiftMeta?: { classLevel: ClassLevel; group: GroupType; shiftName: string; subjects: string[]; tonePreference: TonePreference }
+  ) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -142,7 +153,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     fullName: string,
     role: 'teacher' | 'student',
     coachingName?: string,
-    inviteToken?: string
+    inviteToken?: string,
+    shiftMeta?: { classLevel: ClassLevel; group: GroupType; shiftName: string; subjects: string[]; tonePreference: TonePreference }
   ): Promise<{ error: string | null }> => {
     try {
       let coachingId: string | null = null;
@@ -165,7 +177,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // TEACHERS: Create coaching after auth
       if (role === 'teacher' && coachingName) {
-        coachingId = await createCoaching(firebaseUser.uid, coachingName);
+        if (!shiftMeta) {
+          return { error: 'Shift details are required to create a coaching.' };
+        }
+        coachingId = await createCoaching(firebaseUser.uid, coachingName, shiftMeta);
       }
 
       // Create user profile in Firebase Firestore

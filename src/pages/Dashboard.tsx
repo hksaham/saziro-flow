@@ -13,12 +13,14 @@ import {
 } from '@/lib/firebaseService';
 import Logo from '@/components/ui/Logo';
 import ToneSelector from '@/components/ui/ToneSelector';
-import { LogOut, Copy, Check, Users, UserCheck, UserX, Loader2 } from 'lucide-react';
+import { LogOut, Copy, Check, Users, UserCheck, UserX, Loader2, Upload } from 'lucide-react';
 import StatusCard from '@/components/student/StatusCard';
 import ActionButton from '@/components/student/ActionButton';
 import FeatureCard from '@/components/student/FeatureCard';
 import PerformanceCard from '@/components/student/PerformanceCard';
+import ThemeToggle from '@/components/ui/ThemeToggle';
 import CoachingSwitcher from '@/components/student/CoachingSwitcher';
+import TeacherShiftSwitcher from '@/components/teacher/TeacherShiftSwitcher';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -138,6 +140,7 @@ const Dashboard = () => {
           <Logo size="sm" />
           <div className="flex items-center gap-4">
             <ToneSelector />
+            <ThemeToggle />
             <button onClick={signOut} className="btn-ghost flex items-center gap-2">
               <LogOut className="w-4 h-4" />
               {t.logout}
@@ -163,6 +166,17 @@ const Dashboard = () => {
           {/* Teacher View */}
           {isTeacher && coaching && (
             <>
+              {/* Teacher Actions Row */}
+              <div className="flex flex-wrap gap-3 animate-slide-in">
+                <button
+                  onClick={() => navigate('/upload-questions')}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload Questions
+                </button>
+              </div>
+
               {/* Invite Link Card */}
               <div className="card-premium p-6 animate-slide-in">
                 <div className="flex items-start justify-between gap-4 flex-wrap">

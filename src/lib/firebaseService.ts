@@ -38,12 +38,30 @@ export interface FirebaseUser {
   updatedAt?: Timestamp;
 }
 
+// Valid options for shift metadata
+export type ClassLevel = 'Class 9' | 'New 10' | 'Old 10';
+export type GroupType = 'Science' | 'Commerce' | 'Humanities';
+export type TonePreference = 'Formal' | 'Banglish' | 'Cool';
+
+// Subjects available per group
+export const SUBJECTS_BY_GROUP: Record<GroupType, string[]> = {
+  Science: ['Physics', 'Chemistry', 'Biology', 'Higher Math', 'Bangla', 'English'],
+  Commerce: ['Accounting', 'Business Studies', 'Finance', 'Economics', 'Bangla', 'English'],
+  Humanities: ['Civics', 'History', 'Islamic Studies', 'Geography', 'Bangla', 'English'],
+};
+
 export interface Coaching {
   coachingId: string;
   name: string;
   teacherUid: string;
   inviteToken: string;
   createdAt: Timestamp;
+  // Multi-shift fields (required for new workspaces)
+  classLevel: ClassLevel;
+  group: GroupType;
+  shiftName: string;
+  subjects: string[];
+  tonePreference: TonePreference;
 }
 
 export interface CoachingMember {
@@ -219,6 +237,16 @@ export const approveStudent = async (
 ): Promise<void> => {
   const batch = writeBatch(db);
 
+  // Read coaching to auto-tag student with shift metadata
+  const coachingRef = doc(db, 'coachings', coachingId);
+  const coachingSnap = await getDoc(coachingRef);
+  const coachingData = coachingSnap.data() as Coaching | undefined;
+
+  // Use coaching's classLevel/group as the authoritative source for student tagging.
+  // Fall back to manually supplied class/board for legacy coachings that pre-date this feature.
+  const studentClass = coachingData?.classLevel || userData.class || null;
+  const studentBoard = coachingData?.group || userData.board || null;
+
   // Update user root status
   const userRef = doc(db, 'users', uid);
   const userSnap = await getDoc(userRef);
@@ -239,8 +267,8 @@ export const approveStudent = async (
     name: userData.name,
     email: existingUser?.email || '',
     role: 'student',
-    class: userData.class || null,
-    board: userData.board || null,
+    class: studentClass,
+    board: studentBoard,
     membershipStatus: 'approved',
     joinedAt: serverTimestamp(),
   }, { merge: true });
@@ -259,8 +287,8 @@ export const approveStudent = async (
   batch.set(leaderboardRef, {
     uid,
     name: userData.name,
-    class: userData.class || null,
-    board: userData.board || null,
+    class: studentClass,
+    board: studentBoard,
     xp: 0,
     streak: 0,
     longestStreak: 0,
@@ -274,7 +302,7 @@ export const approveStudent = async (
   });
 
   await batch.commit();
-  console.log('✅ FIREBASE: Approved student with server-scoped leaderboard', uid);
+  console.log('✅ FIREBASE: Approved student with server-scoped leaderboard', uid, `[class: ${studentClass}, group: ${studentBoard}]`);
 };
 
 export const rejectStudent = async (uid: string, coachingId?: string): Promise<void> => {
@@ -309,7 +337,14 @@ export const rejectStudent = async (uid: string, coachingId?: string): Promise<v
 
 export const createCoaching = async (
   teacherUid: string,
-  name: string
+  name: string,
+  shiftMeta: {
+    classLevel: ClassLevel;
+    group: GroupType;
+    shiftName: string;
+    subjects: string[];
+    tonePreference: TonePreference;
+  }
 ): Promise<string> => {
   const coachingRef = doc(collection(db, 'coachings'));
   const inviteToken = generateInviteToken();
@@ -322,6 +357,11 @@ export const createCoaching = async (
     teacherUid,
     inviteToken,
     createdAt: serverTimestamp(),
+    classLevel: shiftMeta.classLevel,
+    group: shiftMeta.group,
+    shiftName: shiftMeta.shiftName,
+    subjects: shiftMeta.subjects,
+    tonePreference: shiftMeta.tonePreference,
   });
 
   // Teacher is also a member of their own coaching
@@ -345,8 +385,23 @@ export const createCoaching = async (
   });
 
   await batch.commit();
-  console.log('✅ FIREBASE: Created coaching', coachingRef.id);
+  console.log('✅ FIREBASE: Created coaching', coachingRef.id, `[${shiftMeta.shiftName} · ${shiftMeta.classLevel} · ${shiftMeta.group}]`);
   return coachingRef.id;
+};
+
+// Allow a teacher to add a new shift to their account (post-signup)
+export const createAdditionalShift = async (
+  teacherUid: string,
+  name: string,
+  shiftMeta: {
+    classLevel: ClassLevel;
+    group: GroupType;
+    shiftName: string;
+    subjects: string[];
+    tonePreference: TonePreference;
+  }
+): Promise<string> => {
+  return createCoaching(teacherUid, name, shiftMeta);
 };
 
 export const getCoaching = async (coachingId: string): Promise<Coaching | null> => {
@@ -373,6 +428,16 @@ export const getCoachingByInviteToken = async (
 const generateInviteToken = (): string => {
   return Math.random().toString(36).substring(2, 15) +
     Math.random().toString(36).substring(2, 15);
+};
+
+// Fetch all coaching workspaces owned by a specific teacher
+export const getCoachingsByTeacher = async (
+  teacherUid: string
+): Promise<Coaching[]> => {
+  const coachingsRef = collection(db, 'coachings');
+  const q = query(coachingsRef, where('teacherUid', '==', teacherUid));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(d => d.data() as Coaching);
 };
 
 // ============================================
@@ -487,11 +552,13 @@ export const saveTestResult = async (
 ): Promise<string> => {
   const testId = `${uid}_${result.setId}_${Date.now()}`;
   const resultRef = doc(db, 'coachings', coachingId, 'results', testId);
+  const submittedDate = new Date().toISOString().split('T')[0];
 
   await setDoc(resultRef, {
     uid,
     mode: 'test',
     ...result,
+    submittedDate,
     submittedAt: serverTimestamp(),
   });
 
@@ -511,11 +578,13 @@ export const savePracticeResult = async (
 ): Promise<void> => {
   const practiceId = `${uid}_${result.setId}_${Date.now()}`;
   const resultRef = doc(db, 'coachings', coachingId, 'results', practiceId);
+  const submittedDate = new Date().toISOString().split('T')[0];
 
   await setDoc(resultRef, {
     uid,
     mode: 'practice',
     ...result,
+    submittedDate,
     submittedAt: serverTimestamp(),
   });
 
@@ -528,34 +597,31 @@ export const getTodayTestResult = async (
 ): Promise<MCQResult | null> => {
   const today = new Date().toISOString().split('T')[0];
   const resultsRef = collection(db, 'coachings', coachingId, 'results');
-  const q = query(resultsRef, where('uid', '==', uid), where('mode', '==', 'test'));
+  const q = query(
+    resultsRef,
+    where('uid', '==', uid),
+    where('mode', '==', 'test'),
+    where('submittedDate', '==', today),
+    limit(1)
+  );
   const snapshot = await getDocs(q);
 
-  for (const docSnap of snapshot.docs) {
-    const data = docSnap.data() as MCQResult;
-    const submittedDate = data.submittedAt?.toDate?.()?.toISOString().split('T')[0];
-    if (submittedDate === today) {
-      return data;
-    }
-  }
-  return null;
+  if (snapshot.empty) return null;
+  return snapshot.docs[0].data() as MCQResult;
 };
 
 export const getTodayPracticeCount = async (uid: string, coachingId: string): Promise<number> => {
   const today = new Date().toISOString().split('T')[0];
   const resultsRef = collection(db, 'coachings', coachingId, 'results');
-  const q = query(resultsRef, where('uid', '==', uid), where('mode', '==', 'practice'));
+  const q = query(
+    resultsRef,
+    where('uid', '==', uid),
+    where('mode', '==', 'practice'),
+    where('submittedDate', '==', today)
+  );
   const snapshot = await getDocs(q);
 
-  let count = 0;
-  for (const docSnap of snapshot.docs) {
-    const data = docSnap.data();
-    const submittedDate = data.submittedAt?.toDate?.()?.toISOString().split('T')[0];
-    if (submittedDate === today) {
-      count++;
-    }
-  }
-  return count;
+  return snapshot.size;
 };
 
 // ============================================
@@ -640,6 +706,7 @@ export const saveTestResultAtomic = async (
     uid,
     mode: 'test',
     ...result,
+    submittedDate: today,
     submittedAt: serverTimestamp(),
   });
 
@@ -802,7 +869,11 @@ export const getTodayPerformance = async (
 
   const today = new Date().toISOString().split('T')[0];
   const resultsRef = collection(db, 'coachings', coachingId, 'results');
-  const q = query(resultsRef, where('uid', '==', uid));
+  const q = query(
+    resultsRef,
+    where('uid', '==', uid),
+    where('submittedDate', '==', today)
+  );
   const snapshot = await getDocs(q);
 
   let testTotal = 0;
@@ -811,14 +882,11 @@ export const getTodayPerformance = async (
 
   for (const docSnap of snapshot.docs) {
     const data = docSnap.data();
-    const submittedDate = data.submittedAt?.toDate?.()?.toISOString().split('T')[0];
-    if (submittedDate === today) {
-      if (data.mode === 'test') {
-        testTotal += (data.correct || 0) + (data.wrong || 0);
-        testCorrect += data.correct || 0;
-      } else if (data.mode === 'practice') {
-        practiceTotal += (data.correct || 0) + (data.wrong || 0);
-      }
+    if (data.mode === 'test') {
+      testTotal += (data.correct || 0) + (data.wrong || 0);
+      testCorrect += data.correct || 0;
+    } else if (data.mode === 'practice') {
+      practiceTotal += (data.correct || 0) + (data.wrong || 0);
     }
   }
 

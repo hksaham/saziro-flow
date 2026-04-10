@@ -8,6 +8,9 @@ import {
   getCoachingMCQSets,
   seedCoachingMCQSets,
 } from '@/lib/firebaseService';
+import {
+  resolveQuestionPool,
+} from '@/lib/customQuestionsService';
 import type { MCQQuestion, MCQSet } from '@/types/mcq';
 
 // STRICT LIMITS
@@ -71,13 +74,25 @@ export const useDailyTest = () => {
     }
   }, [user, coachingId]);
 
-  /**
-   * Load MCQ sets from coaching server: coachings/{coachingId}/mcq_sets
-   * Falls back to global mcq_sets and copies to coaching if needed.
-   */
-  const loadCoachingMCQSet = useCallback(async (): Promise<MCQSet | null> => {
-    if (!coachingId) return null;
+  // -------------------------------------------------------
+  // Core resolver: custom questions first, then global fallback
+  // -------------------------------------------------------
+  const loadQuestions = useCallback(async (): Promise<MCQQuestion[]> => {
+    if (!coachingId) return [];
 
+    // 1. Check for teacher-uploaded custom questions
+    const { questions: customQs, source } = await resolveQuestionPool(coachingId);
+
+    if (source === 'custom') {
+      return customQs;
+    }
+
+    if (source === 'empty') {
+      // Teacher disabled global questions but hasn't uploaded anything
+      return [];
+    }
+
+    // source === 'global' — fall back to the SAZIRO Flow 900+ question bank
     let { docs, fromGlobal } = await getCoachingMCQSets(coachingId);
 
     if (docs.length === 0) {
@@ -88,18 +103,23 @@ export const useDailyTest = () => {
       fromGlobal = retry.fromGlobal;
     }
 
-    if (docs.length === 0) return null;
+    if (docs.length === 0) return [];
 
-    // Copy global sets to coaching for future use
     if (fromGlobal) {
       await seedCoachingMCQSets(coachingId);
     }
 
     const activeDoc =
       docs.find((d) => (d.data() as any)?.status === 'active') || docs[0];
-    return activeDoc.data() as MCQSet;
+    const mcqSet = activeDoc.data() as MCQSet;
+
+    const { convertToLegacyFormat } = await import('@/types/mcq');
+    return mcqSet.questions.map((q) => convertToLegacyFormat(q));
   }, [coachingId]);
 
+  // -------------------------------------------------------
+  // Daily test
+  // -------------------------------------------------------
   const getOrCreateDailyTest = useCallback(async (): Promise<{
     questions: MCQQuestion[];
     dailyTestId: string;
@@ -112,27 +132,30 @@ export const useDailyTest = () => {
     try {
       console.log('🔥 FIREBASE: Getting daily test for coaching', coachingId);
 
-      const mcqSet = await loadCoachingMCQSet();
-      if (!mcqSet) {
-        return { questions: [], dailyTestId: '', error: 'No MCQ sets available' };
+      const allQuestions = await loadQuestions();
+
+      if (allQuestions.length === 0) {
+        return {
+          questions: [],
+          dailyTestId: '',
+          error: 'No questions available. Your teacher has disabled global questions and has not uploaded any custom questions yet.',
+        };
       }
 
-      // Create/get daily test inside coaching server: coachings/{coachingId}/tests
-      const { setId } = await firebaseGetOrCreateDailyTest(coachingId, mcqSet.questions);
+      const { setId } = await firebaseGetOrCreateDailyTest(coachingId, allQuestions);
+      const questions = allQuestions.slice(0, TEST_QUESTION_LIMIT);
 
-      const { convertToLegacyFormat } = await import('@/types/mcq');
-      const questions = mcqSet.questions
-        .slice(0, TEST_QUESTION_LIMIT)
-        .map((q) => convertToLegacyFormat(q));
-
-      console.log(`✅ FIREBASE: Loaded ${questions.length} test questions from coaching server`);
+      console.log(`✅ FIREBASE: Loaded ${questions.length} test questions`);
       return { questions, dailyTestId: setId };
     } catch (err: any) {
       console.error('❌ FIREBASE: Error in getOrCreateDailyTest:', err);
       return { questions: [], dailyTestId: '', error: err.message };
     }
-  }, [user, coachingId, loadCoachingMCQSet]);
+  }, [user, coachingId, loadQuestions]);
 
+  // -------------------------------------------------------
+  // Practice
+  // -------------------------------------------------------
   const getPracticeQuestions = useCallback(async (): Promise<{
     questions: MCQQuestion[];
     setNumber: number;
@@ -143,7 +166,7 @@ export const useDailyTest = () => {
     }
 
     try {
-      console.log('🔥 FIREBASE: Getting practice questions from coaching server');
+      console.log('🔥 FIREBASE: Getting practice questions');
 
       const practiceCount = await getTodayPracticeCount(user.id, coachingId);
 
@@ -156,44 +179,39 @@ export const useDailyTest = () => {
       }
 
       const nextSetNumber = practiceCount + 1;
+      const allQuestions = await loadQuestions();
 
-      const mcqSet = await loadCoachingMCQSet();
-      if (!mcqSet) {
-        return { questions: [], setNumber: 0, error: 'No MCQ sets available' };
+      if (allQuestions.length === 0) {
+        return {
+          questions: [],
+          setNumber: 0,
+          error: 'No questions available. Your teacher has not uploaded any custom questions yet.',
+        };
       }
-
-      const { convertToLegacyFormat } = await import('@/types/mcq');
 
       const startIdx =
-        ((nextSetNumber - 1) * PRACTICE_QUESTION_LIMIT) % mcqSet.questions.length;
-      const selectedQuestions = [];
+        ((nextSetNumber - 1) * PRACTICE_QUESTION_LIMIT) % allQuestions.length;
+      const selectedQuestions: MCQQuestion[] = [];
 
-      for (
-        let i = 0;
-        i < PRACTICE_QUESTION_LIMIT && i < mcqSet.questions.length;
-        i++
-      ) {
-        const idx = (startIdx + i) % mcqSet.questions.length;
-        selectedQuestions.push(mcqSet.questions[idx]);
+      for (let i = 0; i < PRACTICE_QUESTION_LIMIT && i < allQuestions.length; i++) {
+        const idx = (startIdx + i) % allQuestions.length;
+        selectedQuestions.push(allQuestions[idx]);
       }
 
-      const questions = selectedQuestions.map((q) => convertToLegacyFormat(q));
-
       console.log(
-        `✅ FIREBASE: Loaded ${questions.length} practice questions from coaching server (set #${nextSetNumber})`
+        `✅ FIREBASE: Loaded ${selectedQuestions.length} practice questions (set #${nextSetNumber})`
       );
 
-      return { questions, setNumber: nextSetNumber };
+      return { questions: selectedQuestions, setNumber: nextSetNumber };
     } catch (err: any) {
       console.error('❌ FIREBASE: Error getting practice questions:', err);
       return { questions: [], setNumber: 0, error: err.message };
     }
-  }, [user, coachingId, loadCoachingMCQSet]);
+  }, [user, coachingId, loadQuestions]);
 
   const recordTestAttempt = useCallback(
     async (dailyTestId: string, performanceId: string): Promise<boolean> => {
       if (!user || !coachingId) return false;
-
       try {
         console.log('🔥 FIREBASE: Recording test attempt', dailyTestId);
         await checkDailyStatus();
@@ -209,7 +227,6 @@ export const useDailyTest = () => {
   const recordPracticeAttempt = useCallback(
     async (setNumber: number, performanceId: string): Promise<boolean> => {
       if (!user) return false;
-
       try {
         console.log('🔥 FIREBASE: Recording practice attempt', setNumber);
         await checkDailyStatus();

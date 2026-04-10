@@ -29,7 +29,7 @@ const Index = () => {
   {
     icon: Zap,
     title: 'AI-Powered Learning',
-    description: 'Get personalized study recommendations based on your performance.'
+    description: 'Get personalized Saziro Flow recommendations based on your performance.'
   },
   {
     icon: Shield,
@@ -115,7 +115,7 @@ const Index = () => {
         <div className="container max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground">
-              Why Choose <span className="text-gradient-emerald">Study Buddy</span>?
+              Why Choose <span className="text-gradient-emerald">SAZIRO Flow</span>?
             </h2>
             <p className="mt-4 text-muted-foreground max-w-xl mx-auto">
               Everything you need to excel in your SSC exams, all in one place.
@@ -199,7 +199,7 @@ const Index = () => {
         <div className="container flex flex-col md:flex-row justify-between items-center gap-4">
           <Logo size="sm" showText={false} />
           <p className="text-sm text-muted-foreground">
-            © 2025 Study Buddy. All rights reserved.
+            © 2025 SAZIRO Flow. All rights reserved.
           </p>
         </div>
       </footer>

@@ -25,7 +25,7 @@ const Logo = ({ size = 'md', showText = true }: LogoProps) => {
       </div>
       {showText && (
         <span className={`font-display font-bold ${textClasses[size]} text-foreground`}>
-          Study<span className="text-gradient-emerald">Buddy</span>
+          SAZIRO<span className="text-gradient-emerald">FLOW</span>
         </span>
       )}
     </div>

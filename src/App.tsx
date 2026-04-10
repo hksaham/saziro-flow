@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ToneProvider } from "@/contexts/ToneContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
@@ -18,10 +19,12 @@ import MistakeNotebook from "./pages/MistakeNotebook";
 import Profile from "./pages/Profile";
 import Leaderboard from "./pages/Leaderboard";
 import NotFound from "./pages/NotFound";
+import QuestionUploader from "./pages/QuestionUploader";
 
 const queryClient = new QueryClient();
 
 const App = () => (
+  <ThemeProvider>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <ToneProvider>
@@ -92,6 +95,14 @@ const App = () => (
                 }
               />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route
+                path="/upload-questions"
+                element={
+                  <ProtectedRoute allowedRoles={['teacher']}>
+                    <QuestionUploader />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
@@ -99,6 +110,7 @@ const App = () => (
       </ToneProvider>
     </TooltipProvider>
   </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

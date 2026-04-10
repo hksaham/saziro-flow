@@ -4,9 +4,51 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTone } from '@/contexts/ToneContext';
 import Logo from '@/components/ui/Logo';
 import ToneSelector from '@/components/ui/ToneSelector';
-import { Eye, EyeOff, Loader2, Mail, Lock, User, Building2, Ticket, ArrowRight, GraduationCap, BookOpen } from 'lucide-react';
+import {
+  Eye, EyeOff, Loader2, Mail, Lock, User, Building2,
+  Ticket, ArrowRight, GraduationCap, BookOpen, ChevronDown,
+} from 'lucide-react';
+import {
+  SUBJECTS_BY_GROUP,
+  ClassLevel,
+  GroupType,
+  TonePreference,
+} from '@/lib/firebaseService';
 
 type Role = 'teacher' | 'student';
+
+const CLASS_LEVELS: ClassLevel[] = ['Class 9', 'New 10', 'Old 10'];
+const GROUPS: GroupType[] = ['Science', 'Commerce', 'Humanities'];
+const TONES: TonePreference[] = ['Formal', 'Banglish', 'Cool'];
+
+// Simple styled select wrapper
+const Select = ({
+  label, value, onChange, options, required = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  required?: boolean;
+}) => (
+  <div className="space-y-2">
+    <label className="text-sm font-medium text-foreground">{label}</label>
+    <div className="relative">
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        required={required}
+        className="input-premium w-full appearance-none pr-10"
+      >
+        <option value="" disabled>Select {label}</option>
+        {options.map(o => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+    </div>
+  </div>
+);
 
 const Signup = () => {
   const { signUp, user, isApproved, isPending, loading } = useAuth();
@@ -14,7 +56,6 @@ const Signup = () => {
   const [searchParams] = useSearchParams();
   const tokenFromUrl = searchParams.get('token') || '';
 
-  // If token in URL → student flow auto-selected; otherwise show role selection
   const [role, setRole] = useState<Role | null>(tokenFromUrl ? 'student' : null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,6 +65,26 @@ const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Shift meta fields (teacher only)
+  const [classLevel, setClassLevel] = useState<ClassLevel | ''>('');
+  const [group, setGroup] = useState<GroupType | ''>('');
+  const [shiftName, setShiftName] = useState('');
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [tonePreference, setTonePreference] = useState<TonePreference | ''>('');
+
+  // When group changes, auto-select all subjects for that group
+  const handleGroupChange = (g: string) => {
+    const chosen = g as GroupType;
+    setGroup(chosen);
+    setSubjects(SUBJECTS_BY_GROUP[chosen] ?? []);
+  };
+
+  const toggleSubject = (subj: string) => {
+    setSubjects(prev =>
+      prev.includes(subj) ? prev.filter(s => s !== subj) : [...prev, subj]
+    );
+  };
 
   if (loading) {
     return (
@@ -35,16 +96,21 @@ const Signup = () => {
 
   if (user) {
     if (isPending) return <Navigate to="/pending" replace />;
-    // After signup, students go to onboarding
     if (isApproved) return <Navigate to="/dashboard" replace />;
-    // For students who just signed up, redirect to onboarding
     return <Navigate to="/onboarding" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!role) return;
-    
+
+    if (role === 'teacher') {
+      if (!classLevel || !group || !shiftName.trim() || !tonePreference || subjects.length === 0) {
+        setError('Please fill in all shift details and select at least one subject.');
+        return;
+      }
+    }
+
     setError('');
     setIsLoading(true);
 
@@ -54,13 +120,22 @@ const Signup = () => {
       fullName,
       role,
       role === 'teacher' ? coachingName : undefined,
-      role === 'student' ? inviteToken : undefined
+      role === 'student' ? inviteToken : undefined,
+      role === 'teacher'
+        ? {
+            classLevel: classLevel as ClassLevel,
+            group: group as GroupType,
+            shiftName: shiftName.trim(),
+            subjects,
+            tonePreference: tonePreference as TonePreference,
+          }
+        : undefined
     );
-    
+
     if (result.error) {
       setError(result.error);
     }
-    
+
     setIsLoading(false);
   };
 
@@ -81,8 +156,6 @@ const Signup = () => {
               Teachers create coaching centers. Students join via invite links. Simple and secure.
             </p>
           </div>
-          
-          {/* Decorative Elements */}
           <div className="absolute bottom-20 left-16 w-64 h-64 bg-primary/5 rounded-full blur-3xl animate-float" />
           <div className="absolute top-1/4 right-10 w-32 h-32 border border-primary/20 rounded-2xl rotate-12 animate-float delay-300" />
         </div>
@@ -103,16 +176,14 @@ const Signup = () => {
               <h2 className="text-3xl font-display font-bold text-foreground">
                 {t.createAccount}
               </h2>
-              <p className="mt-2 text-muted-foreground">
-                {t.welcome}
-              </p>
+              <p className="mt-2 text-muted-foreground">{t.welcome}</p>
             </div>
 
             {/* Role Selection */}
             {!role && (
               <div className="space-y-4 animate-fade-in">
                 <p className="text-center text-muted-foreground mb-6">Choose your role to get started</p>
-                
+
                 <button
                   onClick={() => setRole('teacher')}
                   className="w-full card-premium p-6 flex items-center gap-4 hover:border-primary/50 transition-all group"
@@ -171,6 +242,7 @@ const Signup = () => {
                   </span>
                 </div>
 
+                {/* Common fields */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">{t.fullName}</label>
                   <div className="relative">
@@ -178,7 +250,7 @@ const Signup = () => {
                     <input
                       type="text"
                       value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
+                      onChange={e => setFullName(e.target.value)}
                       className="input-premium pl-12"
                       placeholder="John Doe"
                       required
@@ -193,7 +265,7 @@ const Signup = () => {
                     <input
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={e => setEmail(e.target.value)}
                       className="input-premium pl-12"
                       placeholder="you@example.com"
                       required
@@ -208,7 +280,7 @@ const Signup = () => {
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={e => setPassword(e.target.value)}
                       className="input-premium pl-12 pr-12"
                       placeholder="••••••••"
                       minLength={6}
@@ -224,23 +296,101 @@ const Signup = () => {
                   </div>
                 </div>
 
+                {/* ── Teacher-only fields ── */}
                 {role === 'teacher' && (
-                  <div className="space-y-2 animate-fade-in">
-                    <label className="text-sm font-medium text-foreground">{t.coachingName}</label>
-                    <div className="relative">
-                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <input
-                        type="text"
-                        value={coachingName}
-                        onChange={(e) => setCoachingName(e.target.value)}
-                        className="input-premium pl-12"
-                        placeholder="My Coaching Center"
-                        required
-                      />
+                  <div className="space-y-5 animate-fade-in">
+                    {/* Divider */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Shift Details</span>
+                      <div className="flex-1 h-px bg-border" />
                     </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Coaching Name</label>
+                      <div className="relative">
+                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <input
+                          type="text"
+                          value={coachingName}
+                          onChange={e => setCoachingName(e.target.value)}
+                          className="input-premium pl-12"
+                          placeholder="e.g. Bright Future Academy"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Shift Name</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={shiftName}
+                          onChange={e => setShiftName(e.target.value)}
+                          className="input-premium"
+                          placeholder="e.g. Morning, Afternoon, Evening"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <Select
+                      label="Class Level"
+                      value={classLevel}
+                      onChange={v => setClassLevel(v as ClassLevel)}
+                      options={CLASS_LEVELS}
+                      required
+                    />
+
+                    <Select
+                      label="Group"
+                      value={group}
+                      onChange={handleGroupChange}
+                      options={GROUPS}
+                      required
+                    />
+
+                    {/* Subject multi-select */}
+                    {group && (
+                      <div className="space-y-2 animate-fade-in">
+                        <label className="text-sm font-medium text-foreground">
+                          Subjects
+                          <span className="ml-1 text-xs text-muted-foreground">(tap to toggle)</span>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {(SUBJECTS_BY_GROUP[group as GroupType] ?? []).map(subj => (
+                            <button
+                              key={subj}
+                              type="button"
+                              onClick={() => toggleSubject(subj)}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                                subjects.includes(subj)
+                                  ? 'bg-primary text-primary-foreground border-primary'
+                                  : 'bg-secondary text-foreground border-border hover:border-primary/40'
+                              }`}
+                            >
+                              {subj}
+                            </button>
+                          ))}
+                        </div>
+                        {subjects.length === 0 && (
+                          <p className="text-xs text-destructive">Select at least one subject</p>
+                        )}
+                      </div>
+                    )}
+
+                    <Select
+                      label="Tone Preference"
+                      value={tonePreference}
+                      onChange={v => setTonePreference(v as TonePreference)}
+                      options={TONES}
+                      required
+                    />
                   </div>
                 )}
 
+                {/* ── Student-only fields ── */}
                 {role === 'student' && (
                   <div className="space-y-2 animate-fade-in">
                     <label className="text-sm font-medium text-foreground">{t.enterInviteToken}</label>
@@ -249,7 +399,7 @@ const Signup = () => {
                       <input
                         type="text"
                         value={inviteToken}
-                        onChange={(e) => setInviteToken(e.target.value)}
+                        onChange={e => setInviteToken(e.target.value)}
                         className="input-premium pl-12"
                         placeholder="Paste invite token here"
                         required
